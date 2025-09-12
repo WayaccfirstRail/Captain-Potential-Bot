@@ -1,8 +1,8 @@
-modules = ["nodejs-20", "bash"]
+modules = ["nodejs-20", "bash", "postgresql-16"]
 
 [agent]
 stack = "AGENT_STACK"
-integrations = ["agentstack-trigger-telegram:1.0.0"]
+integrations = ["agentstack-trigger-telegram:1.0.0", "javascript_gemini:1.0.0"]
 expertMode = true
 
 [nix]
@@ -22,10 +22,6 @@ exposeLocalhost = true
 [[ports]]
 localPort = 8289
 externalPort = 3001
-
-[[ports]]
-localPort = 37509
-externalPort = 3003
 
 [[ports]]
 localPort = 50052
