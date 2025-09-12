@@ -32,31 +32,31 @@ export function formatContentCard(content: ContentItem, language: 'ar' | 'en' = 
   
   // Header with emoji based on content type
   const emoji = getSectionEmoji(content.section_name);
-  message += `${emoji} **${title}**\n`;
+  message += `${emoji} <b>${title}</b>\n`;
   
   // Add premium/trending badges
   if (content.is_premium) {
-    message += isArabic ? '🏆 **محتوى مميز**\n' : '🏆 **Premium Content**\n';
+    message += isArabic ? '🏆 <b>محتوى مميز</b>\n' : '🏆 <b>Premium Content</b>\n';
   }
   if (content.is_trending) {
-    message += isArabic ? '🔥 **رائج الآن**\n' : '🔥 **Trending Now**\n';
+    message += isArabic ? '🔥 <b>رائج الآن</b>\n' : '🔥 <b>Trending Now</b>\n';
   }
   
   message += '\n';
   
   // Content details
-  message += isArabic ? `📂 **القسم:** ${section}\n` : `📂 **Section:** ${section}\n`;
+  message += isArabic ? `📂 <b>القسم:</b> ${section}\n` : `📂 <b>Section:</b> ${section}\n`;
   
   if (content.year) {
-    message += isArabic ? `📅 **السنة:** ${content.year}\n` : `📅 **Year:** ${content.year}\n`;
+    message += isArabic ? `📅 <b>السنة:</b> ${content.year}\n` : `📅 <b>Year:</b> ${content.year}\n`;
   }
   
   if (content.genre) {
-    message += isArabic ? `🎭 **النوع:** ${content.genre}\n` : `🎭 **Genre:** ${content.genre}\n`;
+    message += isArabic ? `🎭 <b>النوع:</b> ${content.genre}\n` : `🎭 <b>Genre:</b> ${content.genre}\n`;
   }
   
   if (content.quality) {
-    message += isArabic ? `📺 **الجودة:** ${content.quality}\n` : `📺 **Quality:** ${content.quality}\n`;
+    message += isArabic ? `📺 <b>الجودة:</b> ${content.quality}\n` : `📺 <b>Quality:</b> ${content.quality}\n`;
   }
   
   if (content.duration_minutes) {
@@ -64,21 +64,21 @@ export function formatContentCard(content: ContentItem, language: 'ar' | 'en' = 
     const minutes = content.duration_minutes % 60;
     const duration = hours > 0 ? `${hours}س ${minutes}د` : `${minutes}د`;
     const durationEn = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-    message += isArabic ? `⏱️ **المدة:** ${duration}\n` : `⏱️ **Duration:** ${durationEn}\n`;
+    message += isArabic ? `⏱️ <b>المدة:</b> ${duration}\n` : `⏱️ <b>Duration:</b> ${durationEn}\n`;
   }
   
   if (content.rating) {
     const stars = '⭐'.repeat(Math.floor(content.rating / 2));
-    message += isArabic ? `${stars} **التقييم:** ${content.rating}/10\n` : `${stars} **Rating:** ${content.rating}/10\n`;
+    message += isArabic ? `${stars} <b>التقييم:</b> ${content.rating}/10\n` : `${stars} <b>Rating:</b> ${content.rating}/10\n`;
   }
   
   // Description
   if (description) {
-    message += isArabic ? `\n📝 **النبذة:**\n${description}\n` : `\n📝 **Description:**\n${description}\n`;
+    message += isArabic ? `\n📝 <b>النبذة:</b>\n${description}\n` : `\n📝 <b>Description:</b>\n${description}\n`;
   }
   
   // Footer
-  message += isArabic ? `\n💾 **ID:** ${content.id}` : `\n💾 **ID:** ${content.id}`;
+  message += isArabic ? `\n💾 <b>ID:</b> ${content.id}` : `\n💾 <b>ID:</b> ${content.id}`;
   
   return message;
 }
@@ -98,7 +98,7 @@ export function formatContentList(
     return isArabic ? '❌ لم يتم العثور على محتوى.' : '❌ No content found.';
   }
   
-  let message = isArabic ? '🎬 **قائمة المحتوى**\n\n' : '🎬 **Content List**\n\n';
+  let message = isArabic ? '🎬 <b>قائمة المحتوى</b>\n\n' : '🎬 <b>Content List</b>\n\n';
   
   contents.forEach((content, index) => {
     const emoji = getSectionEmoji(content.section_name);
@@ -110,7 +110,7 @@ export function formatContentList(
     
     const badgeText = badges.length > 0 ? ` ${badges.join('')}` : '';
     
-    message += `${index + 1}. ${emoji} **${title}**${badgeText}\n`;
+    message += `${index + 1}. ${emoji} <b>${title}</b>${badgeText}\n`;
     message += `   ${isArabic ? 'ID' : 'ID'}: ${content.id}`;
     
     if (content.year) message += ` • ${content.year}`;
@@ -136,21 +136,21 @@ export function getWelcomeMessage(userName: string, language: 'ar' | 'en' = 'ar'
   if (language === 'ar') {
     return `🎬 أهلاً وسهلاً ${userName}! 
 
-مرحباً بك في **سينما العرب** - وجهتك الأولى للأفلام والمسلسلات العربية والأجنبية! 🍿
+مرحباً بك في <b>سينما العرب</b> - وجهتك الأولى للأفلام والمسلسلات العربية والأجنبية! 🍿
 
-🎭 **المحتوى المتاح:**
+🎭 <b>المحتوى المتاح:</b>
 • 🎬 أفلام عربية وأجنبية
 • 📺 مسلسلات وبرامج تلفزيونية  
 • 🎌 أنمي وأفلام كرتون
 • 📚 أفلام وثائقية
 
-⚡ **المميزات:**
+⚡ <b>المميزات:</b>
 • بحث سريع وذكي
 • جودة عالية HD & 4K
 • ترجمة عربية احترافية
 • تحديثات يومية
 
-📱 **الأوامر الأساسية:**
+📱 <b>الأوامر الأساسية:</b>
 /search - البحث عن محتوى
 /trending - المحتوى الرائج
 /sections - تصفح الأقسام
@@ -162,21 +162,21 @@ export function getWelcomeMessage(userName: string, language: 'ar' | 'en' = 'ar'
   } else {
     return `🎬 Welcome ${userName}!
 
-Welcome to **Cinema Arabia** - your premier destination for Arabic and international content! 🍿
+Welcome to <b>Cinema Arabia</b> - your premier destination for Arabic and international content! 🍿
 
-🎭 **Available Content:**
+🎭 <b>Available Content:</b>
 • 🎬 Arabic & International Movies
 • 📺 TV Series & Shows
 • 🎌 Anime & Cartoons  
 • 📚 Documentaries
 
-⚡ **Features:**
+⚡ <b>Features:</b>
 • Smart & Fast Search
 • High Quality HD & 4K
 • Professional Arabic Subtitles
 • Daily Updates
 
-📱 **Basic Commands:**
+📱 <b>Basic Commands:</b>
 /search - Search for content
 /trending - Trending content
 /sections - Browse sections
@@ -193,68 +193,68 @@ Enjoy watching! 🎪`;
  */
 export function getHelpMessage(language: 'ar' | 'en' = 'ar'): string {
   if (language === 'ar') {
-    return `📖 **دليل استخدام البوت**
+    return `📖 <b>دليل استخدام البوت</b>
 
-🔍 **أوامر البحث:**
+🔍 <b>أوامر البحث:</b>
 /search [كلمة البحث] - البحث في المحتوى
 /trending - عرض المحتوى الرائج
 /sections - تصفح جميع الأقسام
 /latest - أحدث الإضافات
 
-🎬 **تصفح المحتوى:**
+🎬 <b>تصفح المحتوى:</b>
 /movies - عرض الأفلام
 /series - عرض المسلسلات  
 /anime - عرض الأنمي
 /docs - عرض الوثائقيات
 
-⚙️ **الإعدادات:**
+⚙️ <b>الإعدادات:</b>
 /language - تغيير اللغة
 /profile - عرض الملف الشخصي
 /premium - معلومات الاشتراك المميز
 
-💬 **أوامر أخرى:**
+💬 <b>أوامر أخرى:</b>
 /feedback - إرسال ملاحظات
 /support - الدعم الفني
 /about - معلومات عن البوت
 
-🏆 **للمدراء:**
+🏆 <b>للمدراء:</b>
 /admin - لوحة تحكم المدراء (للمدراء فقط)
 
-💡 **نصائح:**
+💡 <b>نصائح:</b>
 • استخدم الرسائل المباشرة للبحث السريع
 • اكتب اسم الفيلم أو المسلسل مباشرة
 • استخدم /premium للحصول على محتوى حصري
 
 ❓ إذا كنت بحاجة لمساعدة إضافية، راسل الدعم الفني!`;
   } else {
-    return `📖 **Bot Usage Guide**
+    return `📖 <b>Bot Usage Guide</b>
 
-🔍 **Search Commands:**
+🔍 <b>Search Commands:</b>
 /search [keyword] - Search content
 /trending - Show trending content
 /sections - Browse all sections
 /latest - Latest additions
 
-🎬 **Browse Content:**
+🎬 <b>Browse Content:</b>
 /movies - Show movies
 /series - Show TV series
 /anime - Show anime
 /docs - Show documentaries
 
-⚙️ **Settings:**
+⚙️ <b>Settings:</b>
 /language - Change language
 /profile - View profile
 /premium - Premium subscription info
 
-💬 **Other Commands:**
+💬 <b>Other Commands:</b>
 /feedback - Send feedback
 /support - Technical support
 /about - About the bot
 
-🏆 **For Admins:**
+🏆 <b>For Admins:</b>
 /admin - Admin control panel (admins only)
 
-💡 **Tips:**
+💡 <b>Tips:</b>
 • Use direct messages for quick search
 • Type movie or series name directly
 • Use /premium for exclusive content
@@ -285,14 +285,14 @@ export function formatTrendingSection(contents: ContentItem[], language: 'ar' | 
     return isArabic ? '❌ لا يوجد محتوى رائج حالياً.' : '❌ No trending content available.';
   }
   
-  let message = isArabic ? '🔥 **المحتوى الرائج**\n\n' : '🔥 **Trending Content**\n\n';
+  let message = isArabic ? '🔥 <b>المحتوى الرائج</b>\n\n' : '🔥 <b>Trending Content</b>\n\n';
   
   contents.slice(0, 5).forEach((content, index) => {
     const emoji = getSectionEmoji(content.section_name);
     const title = isArabic ? (content.title_arabic || content.title) : content.title;
     const rankEmoji = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][index] || '🔸';
     
-    message += `${rankEmoji} ${emoji} **${title}**\n`;
+    message += `${rankEmoji} ${emoji} <b>${title}</b>\n`;
     
     if (content.year) message += `📅 ${content.year} • `;
     if (content.rating) message += `⭐ ${content.rating}/10 • `;
@@ -319,21 +319,21 @@ export function formatAdminNotification(
   const timestamp = new Date().toLocaleString(isArabic ? 'ar-SA' : 'en-US');
   
   if (isArabic) {
-    return `🔔 **تنبيه إداري**
+    return `🔔 <b>تنبيه إداري</b>
 
-👤 **المدير:** ${adminName}
-⚡ **الإجراء:** ${action}
-📝 **التفاصيل:** ${details}
-🕐 **الوقت:** ${timestamp}
+👤 <b>المدير:</b> ${adminName}
+⚡ <b>الإجراء:</b> ${action}
+📝 <b>التفاصيل:</b> ${details}
+🕐 <b>الوقت:</b> ${timestamp}
 
 #admin_activity`;
   } else {
-    return `🔔 **Admin Notification**
+    return `🔔 <b>Admin Notification</b>
 
-👤 **Admin:** ${adminName}
-⚡ **Action:** ${action}
-📝 **Details:** ${details}
-🕐 **Time:** ${timestamp}
+👤 <b>Admin:</b> ${adminName}
+⚡ <b>Action:</b> ${action}
+📝 <b>Details:</b> ${details}
+🕐 <b>Time:</b> ${timestamp}
 
 #admin_activity`;
   }

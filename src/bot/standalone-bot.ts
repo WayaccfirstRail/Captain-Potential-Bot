@@ -43,7 +43,7 @@ export function startCinemaBot() {
     
     await bot.sendMessage(chatId, welcomeMessage, {
       reply_markup: { inline_keyboard: keyboard },
-      parse_mode: 'Markdown'
+      parse_mode: 'HTML'
     });
   });
   
@@ -54,7 +54,7 @@ export function startCinemaBot() {
     
     const helpMessage = getHelpMessage(language);
     await bot.sendMessage(chatId, helpMessage, {
-      parse_mode: 'Markdown'
+      parse_mode: 'HTML'
     });
   });
   
@@ -97,7 +97,7 @@ export function startCinemaBot() {
     if (!moderation.isAppropriate) {
       await bot.sendMessage(chatId, 
         '⚠️ تم رصد محتوى غير مناسب. يرجى الالتزام بقوانين البوت.',
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
       return;
     }
@@ -113,7 +113,7 @@ export function startCinemaBot() {
     const aiResponse = await generateBotResponse(text, { language, userRole });
     
     await bot.sendMessage(chatId, aiResponse, {
-      parse_mode: 'Markdown'
+      parse_mode: 'HTML'
     });
   });
   
@@ -148,6 +148,25 @@ export function startCinemaBot() {
           ? '🔍 اكتب اسم الفيلم أو المسلسل الذي تبحث عنه:'
           : '🔍 Type the name of the movie or series you\'re looking for:'
       );
+    } else if (data === 'movies') {
+      await handleSectionQuery(chatId, 'movies', language);
+    } else if (data === 'series') {
+      await handleSectionQuery(chatId, 'series', language);
+    } else if (data === 'anime') {
+      await handleSectionQuery(chatId, 'anime', language);
+    } else if (data === 'docs') {
+      await handleSectionQuery(chatId, 'docs', language);
+    } else if (data === 'premium') {
+      await handlePremiumQuery(chatId, language);
+    } else if (data === 'language') {
+      await showLanguageSelector(chatId, language);
+    } else if (data === 'back_main') {
+      const welcomeMessage = getWelcomeMessage('المستخدم', language);
+      const keyboard = getMainKeyboard(language);
+      await bot.sendMessage(chatId, welcomeMessage, {
+        reply_markup: { inline_keyboard: keyboard },
+        parse_mode: 'HTML'
+      });
     }
   });
   
@@ -181,7 +200,7 @@ export function startCinemaBot() {
         description: `${content.section_name_arabic} • ${content.year || ''} • ${content.quality || ''}`,
         input_message_content: {
           message_text: formatContentCard(content, 'ar'),
-          parse_mode: 'Markdown' as const
+          parse_mode: 'HTML' as const
         }
       }));
       
@@ -236,7 +255,7 @@ async function handleSearchQuery(chatId: number, searchTerm: string, language: '
       await bot.sendMessage(chatId, language === 'ar' 
         ? `❌ لم يتم العثور على نتائج لـ "${searchTerm}"\n\n💡 جرب:\n• تعديل كلمات البحث\n• البحث باللغة الإنجليزية\n• استخدام أسماء مختصرة`
         : `❌ No results found for "${searchTerm}"\n\n💡 Try:\n• Modifying search terms\n• Searching in English\n• Using shorter names`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
       return;
     }
@@ -250,12 +269,12 @@ async function handleSearchQuery(chatId: number, searchTerm: string, language: '
       if (content.poster_url) {
         await bot.sendPhoto(chatId, content.poster_url, {
           caption: message,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: { inline_keyboard: keyboard }
         });
       } else {
         await bot.sendMessage(chatId, message, {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: { inline_keyboard: keyboard }
         });
       }
@@ -265,7 +284,7 @@ async function handleSearchQuery(chatId: number, searchTerm: string, language: '
       const keyboard = getSearchResultsKeyboard(searchResults.rows.slice(0, 5), language);
       
       await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: keyboard }
       });
     }
@@ -274,7 +293,7 @@ async function handleSearchQuery(chatId: number, searchTerm: string, language: '
     await bot.sendMessage(chatId, language === 'ar' 
       ? '⚠️ حدث خطأ في البحث. يرجى المحاولة مرة أخرى.'
       : '⚠️ Search error occurred. Please try again.',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
   }
 }
@@ -301,7 +320,7 @@ async function handleTrendingCommand(chatId: number, language: 'ar' | 'en') {
     const keyboard = getTrendingKeyboard(trendingResults.rows.slice(0, 3), language);
     
     await bot.sendMessage(chatId, message, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: { inline_keyboard: keyboard }
     });
   } catch (error) {
@@ -309,7 +328,7 @@ async function handleTrendingCommand(chatId: number, language: 'ar' | 'en') {
     await bot.sendMessage(chatId, language === 'ar' 
       ? '⚠️ حدث خطأ في عرض المحتوى الرائج.'
       : '⚠️ Error loading trending content.',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
   }
 }
@@ -331,7 +350,7 @@ async function showContentDetails(chatId: number, contentId: number, language: '
       await bot.sendMessage(chatId, language === 'ar' 
         ? '❌ المحتوى غير موجود أو غير متاح'
         : '❌ Content not found or unavailable',
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
       return;
     }
@@ -343,12 +362,12 @@ async function showContentDetails(chatId: number, contentId: number, language: '
     if (content.poster_url) {
       await bot.sendPhoto(chatId, content.poster_url, {
         caption: message,
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: keyboard }
       });
     } else {
       await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: keyboard }
       });
     }
@@ -357,14 +376,14 @@ async function showContentDetails(chatId: number, contentId: number, language: '
     await bot.sendMessage(chatId, language === 'ar' 
       ? '⚠️ حدث خطأ في عرض التفاصيل'
       : '⚠️ Error displaying details',
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
   }
 }
 
 // Helper functions
 function getUserLanguage(languageCode?: string): 'ar' | 'en' {
-  return languageCode?.startsWith('ar') ? 'ar' : 'ar'; // Default to Arabic
+  return languageCode?.startsWith('ar') ? 'ar' : 'en'; // Default to English for non-Arabic users
 }
 
 function getMainKeyboard(language: 'ar' | 'en') {
@@ -427,6 +446,165 @@ function getTrendingKeyboard(contents: any[], language: 'ar' | 'en') {
   }]);
   
   return keyboard;
+}
+
+/**
+ * Handle section-based queries (movies, series, anime, docs)
+ */
+async function handleSectionQuery(chatId: number, section: string, language: 'ar' | 'en') {
+  try {
+    const sectionMap: { [key: string]: string[] } = {
+      'movies': ['movie', 'أفلام'],
+      'series': ['series', 'مسلسل'],
+      'anime': ['anime', 'أنمي'],
+      'docs': ['doc', 'وثائق']
+    };
+    
+    const sectionNames = sectionMap[section] || ['movie'];
+    
+    const results = await query(`
+      SELECT 
+        c.id, c.title, c.title_arabic, c.description, c.description_arabic,
+        c.genre, c.year, c.quality, c.rating, c.duration_minutes,
+        c.is_premium, c.is_trending, c.poster_url,
+        cs.name as section_name, cs.name_arabic as section_name_arabic
+      FROM content c
+      JOIN content_sections cs ON c.section_id = cs.id
+      WHERE c.is_active = true 
+      AND (cs.name ILIKE $1 OR cs.name ILIKE $2)
+      ORDER BY 
+        CASE WHEN c.is_trending THEN 1 ELSE 2 END,
+        c.rating DESC NULLS LAST,
+        c.created_at DESC
+      LIMIT ${BOT_CONFIG.maxSearchResults}
+    `, [`%${sectionNames[0]}%`, `%${sectionNames[1] || sectionNames[0]}%`]);
+    
+    if (results.rows.length === 0) {
+      await bot.sendMessage(chatId, language === 'ar' 
+        ? `❌ لا يوجد محتوى متاح في قسم ${section}`
+        : `❌ No content available in ${section} section`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    
+    const message = formatContentList(results.rows, 1, 1, language);
+    const keyboard = getSearchResultsKeyboard(results.rows.slice(0, 5), language);
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } catch (error) {
+    console.error(`Section query error for ${section}:`, error);
+    await bot.sendMessage(chatId, language === 'ar' 
+      ? '⚠️ حدث خطأ في عرض المحتوى'
+      : '⚠️ Error loading content',
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Handle premium content queries
+ */
+async function handlePremiumQuery(chatId: number, language: 'ar' | 'en') {
+  try {
+    const premiumResults = await query(`
+      SELECT 
+        c.id, c.title, c.title_arabic, c.description, c.description_arabic,
+        c.genre, c.year, c.quality, c.rating, c.duration_minutes,
+        c.is_premium, c.is_trending, c.poster_url,
+        cs.name as section_name, cs.name_arabic as section_name_arabic
+      FROM content c
+      JOIN content_sections cs ON c.section_id = cs.id
+      WHERE c.is_active = true AND c.is_premium = true
+      ORDER BY c.rating DESC NULLS LAST, c.created_at DESC
+      LIMIT ${BOT_CONFIG.maxSearchResults}
+    `);
+    
+    if (premiumResults.rows.length === 0) {
+      const message = language === 'ar' 
+        ? `🏆 <b>المحتوى المميز</b>
+
+❌ لا يوجد محتوى مميز متاح حالياً
+
+💡 <b>معلومات الاشتراك المميز:</b>
+• 🎬 وصول حصري للأفلام الجديدة
+• 📺 مسلسلات بدون إعلانات
+• 🎌 أنمي مترجم احترافياً
+• 📱 تحميل غير محدود
+• 🚀 جودة فائقة 4K
+
+💰 <b>الأسعار:</b>
+• شهري: 10$ 
+• سنوي: 100$ (وفر 20$)
+
+للاشتراك تواصل مع الإدارة: @admin`
+        : `🏆 <b>Premium Content</b>
+
+❌ No premium content available currently
+
+💡 <b>Premium Subscription Info:</b>
+• 🎬 Exclusive access to new movies
+• 📺 Ad-free series streaming
+• 🎌 Professional anime subtitles
+• 📱 Unlimited downloads
+• 🚀 Ultra quality 4K
+
+💰 <b>Pricing:</b>
+• Monthly: $10
+• Annual: $100 (Save $20)
+
+To subscribe contact admin: @admin`;
+      
+      await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+      return;
+    }
+    
+    const message = formatContentList(premiumResults.rows, 1, 1, language);
+    const keyboard = getSearchResultsKeyboard(premiumResults.rows.slice(0, 5), language);
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } catch (error) {
+    console.error('Premium query error:', error);
+    await bot.sendMessage(chatId, language === 'ar' 
+      ? '⚠️ حدث خطأ في عرض المحتوى المميز'
+      : '⚠️ Error loading premium content',
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Show language selector
+ */
+async function showLanguageSelector(chatId: number, language: 'ar' | 'en') {
+  const message = language === 'ar' 
+    ? `🌍 <b>اختر اللغة</b>
+
+اختر اللغة المفضلة للتفاعل مع البوت:`
+    : `🌍 <b>Choose Language</b>
+
+Select your preferred language for bot interaction:`;
+  
+  const keyboard = [
+    [
+      { text: '🇸🇦 العربية', callback_data: 'lang_ar' },
+      { text: '🇺🇸 English', callback_data: 'lang_en' }
+    ],
+    [
+      { text: language === 'ar' ? '🔙 العودة' : '🔙 Back', callback_data: 'back_main' }
+    ]
+  ];
+  
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: keyboard }
+  });
 }
 
 // Database helper functions
