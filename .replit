@@ -20,11 +20,20 @@ externalPort = 3000
 exposeLocalhost = true
 
 [[ports]]
-localPort = 5000
-externalPort = 80
+localPort = 8289
+externalPort = 3001
 
 [[ports]]
-localPort = 8289
+localPort = 37509
+externalPort = 3003
+
+[[ports]]
+localPort = 50052
+externalPort = 3002
+
+[[ports]]
+localPort = 50053
+externalPort = 80
 
 [workflows]
 runButton = "Project"
@@ -36,26 +45,26 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "Mastra Application"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start inngest server"
+args = "Inngest Server"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "Mastra Application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "mastra dev"
+args = "npx mastra dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
-outputType = "automations"
+outputType = "webview"
 
 [[workflows.workflow]]
-name = "Start inngest server"
+name = "Inngest Server"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -64,4 +73,4 @@ args = "./scripts/inngest.sh"
 waitForPort = 3000
 
 [workflows.workflow.metadata]
-outputType = "automations"
+outputType = "console"
