@@ -11,8 +11,8 @@ packages = ["jq"]
 
 [deployment]
 build = ["bash", "scripts/build.sh"]
-run = ["sh", "-c", "cd .mastra/output && NODE_ENV=production node index.mjs"]
-deploymentTarget = "cloudrun"
+run = ["npm", "run", "dev"]
+deploymentTarget = "vm"
 
 [[ports]]
 localPort = 3000
