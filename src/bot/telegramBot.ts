@@ -9,7 +9,7 @@ import {
   getHelpMessage, 
   formatTrendingSection 
 } from "./messageTemplates";
-import { query as dbQuery } from "../database/client";
+import { query } from "../database/client";
 
 // Telegram Bot API Types
 interface TelegramUser {
@@ -204,7 +204,7 @@ async function handleCommand(
   userRole: string
 ) {
   const [cmd, ...args] = command.split(' ');
-  const query = args.join(' ');
+  const userQuery = args.join(' ');
   
   switch (cmd.toLowerCase()) {
     case '/start':
@@ -225,7 +225,7 @@ async function handleCommand(
       };
       
     case '/search':
-      if (!query) {
+      if (!userQuery) {
         return {
           success: true,
           response_type: 'text' as const,
@@ -233,7 +233,7 @@ async function handleCommand(
           chat_id: chatId
         };
       }
-      return await handleSearchQuery(query, userId, chatId, language);
+      return await handleSearchQuery(userQuery, userId, chatId, language);
       
     case '/trending':
       return await handleTrendingCommand(userId, chatId, language);
@@ -440,9 +440,9 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery, logger:
  * Handle inline queries for search
  */
 async function handleInlineQuery(inlineQuery: any, logger: any) {
-  const query = inlineQuery.query;
+  const searchQuery = inlineQuery.query;
   
-  if (query.length < 2) {
+  if (searchQuery.length < 2) {
     return {
       success: true,
       response_type: 'inline_results' as const,
@@ -463,7 +463,7 @@ async function handleInlineQuery(inlineQuery: any, logger: any) {
       AND (c.title ILIKE $1 OR c.title_arabic ILIKE $1)
       ORDER BY c.rating DESC NULLS LAST
       LIMIT 10
-    `, [`%${query}%`]);
+    `, [`%${searchQuery}%`]);
     
     const results = searchResults.rows.map((content, index) => ({
       type: 'article',

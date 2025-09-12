@@ -1,8 +1,8 @@
 // Gemini AI integration for the Cinema Bot
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Initialize Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 /**
  * Generate Arabic/English responses for bot conversations
@@ -22,15 +22,14 @@ export async function generateBotResponse(
          User role: ${context.userRole}
          Keep responses concise and suitable for Telegram.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: systemPrompt,
-      },
-      contents: userMessage,
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      systemInstruction: systemPrompt
     });
+    
+    const response = await model.generateContent(userMessage);
 
-    return response.text || (context.language === 'ar' ? "عذراً، لم أستطع فهم طلبك. حاول مرة أخرى." : "Sorry, I couldn't understand your request. Please try again.");
+    return response.response.text() || (context.language === 'ar' ? "عذراً، لم أستطع فهم طلبك. حاول مرة أخرى." : "Sorry, I couldn't understand your request. Please try again.");
   } catch (error) {
     console.error('Gemini AI error:', error);
     return context.language === 'ar' 
@@ -58,12 +57,10 @@ export async function enhanceContentDescription(
          Current description: ${description}
          Write an improved description in English with appropriate emojis.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const response = await model.generateContent(prompt);
 
-    return response.text || description;
+    return response.response.text() || description;
   } catch (error) {
     console.error('Content enhancement error:', error);
     return description;
@@ -85,9 +82,9 @@ export async function moderateContent(text: string): Promise<{
                    
                    Text to analyze: ${text}`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      config: {
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-pro",
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: {
           type: "object",
@@ -98,11 +95,12 @@ export async function moderateContent(text: string): Promise<{
           },
           required: ["isAppropriate"]
         }
-      },
-      contents: prompt,
+      }
     });
+    
+    const response = await model.generateContent(prompt);
 
-    const result = JSON.parse(response.text || '{"isAppropriate": true}');
+    const result = JSON.parse(response.response.text() || '{"isAppropriate": true}');
     return result;
   } catch (error) {
     console.error('Content moderation error:', error);
@@ -121,12 +119,10 @@ export async function translateToArabic(text: string): Promise<string> {
                    
                    Keep it concise and appropriate for Telegram messaging.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const response = await model.generateContent(prompt);
 
-    return response.text || text;
+    return response.response.text() || text;
   } catch (error) {
     console.error('Translation error:', error);
     return text;

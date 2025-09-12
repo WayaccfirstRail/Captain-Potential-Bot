@@ -47,6 +47,10 @@ args = "Mastra Application"
 task = "workflow.run"
 args = "Inngest Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Cinema Bot"
+
 [[workflows.workflow]]
 name = "Mastra Application"
 author = "agent"
@@ -67,6 +71,17 @@ author = "agent"
 task = "shell.exec"
 args = "./scripts/inngest.sh"
 waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Cinema Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx src/start-bot.ts"
 
 [workflows.workflow.metadata]
 outputType = "console"
