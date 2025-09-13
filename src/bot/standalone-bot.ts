@@ -222,8 +222,17 @@ export function startCinemaBot() {
       }
       // Basic Bot Callbacks
       else if (data.startsWith('content_')) {
-        const contentId = parseInt(data.split('_')[1]);
-        await showContentDetails(chatId, contentId, language);
+        const contentIdStr = data.split('_')[1];
+        const contentId = parseInt(contentIdStr);
+        if (!isNaN(contentId) && contentId > 0) {
+          await showContentDetails(chatId, contentId, language);
+        } else {
+          console.error('Invalid content ID in callback data:', data);
+          await bot.sendMessage(chatId, 
+            language === 'ar' ? '❌ محتوى غير صالح' : '❌ Invalid content',
+            { parse_mode: 'HTML' }
+          );
+        }
       } else if (data.startsWith('lang_')) {
         const lang = data.split('_')[1] as 'ar' | 'en';
         if (callbackQuery.from.id) {

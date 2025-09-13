@@ -7,7 +7,8 @@ import {
   formatContentList, 
   getWelcomeMessage, 
   getHelpMessage, 
-  formatTrendingSection 
+  formatTrendingSection,
+  type ContentItem
 } from "./messageTemplates";
 import { query } from "../database/client";
 
@@ -295,7 +296,7 @@ async function handleCommand(
 /**
  * Handle search queries
  */
-async function handleSearchQuery(query: string, userId: number, chatId: number, language: 'ar' | 'en') {
+async function handleSearchQuery(searchQuery: string, userId: number, chatId: number, language: 'ar' | 'en') {
   try {
     // Search in content
     const searchResults = await query(`
@@ -322,15 +323,15 @@ async function handleSearchQuery(query: string, userId: number, chatId: number, 
         c.rating DESC NULLS LAST,
         c.created_at DESC
       LIMIT 10
-    `, [`%${query}%`]);
+    `, [`%${searchQuery}%`]);
     
     if (searchResults.rows.length === 0) {
       return {
         success: true,
         response_type: 'text' as const,
         message: language === 'ar' 
-          ? `❌ لم يتم العثور على نتائج لـ "${query}"\n\n💡 جرب:\n• تعديل كلمات البحث\n• البحث باللغة الإنجليزية\n• استخدام أسماء مختصرة`
-          : `❌ No results found for "${query}"\n\n💡 Try:\n• Modifying search terms\n• Searching in English\n• Using shorter names`,
+          ? `❌ لم يتم العثور على نتائج لـ "${searchQuery}"\n\n💡 جرب:\n• تعديل كلمات البحث\n• البحث باللغة الإنجليزية\n• استخدام أسماء مختصرة`
+          : `❌ No results found for "${searchQuery}"\n\n💡 Try:\n• Modifying search terms\n• Searching in English\n• Using shorter names`,
         chat_id: chatId
       };
     }
@@ -650,37 +651,228 @@ async function handleSectionsCommand(userId: number, chatId: number, language: '
 }
 
 async function handleSectionContent(section: string, userId: number, chatId: number, language: 'ar' | 'en') {
-  // Implementation would be similar to search but filtered by section
-  return {
-    success: true,
-    response_type: 'text' as const,
-    message: language === 'ar' ? `قريباً: محتوى قسم ${section}` : `Coming soon: ${section} content`,
-    chat_id: chatId
-  };
+  try {
+    const sectionMap: { [key: string]: string[] } = {
+      'Movies': ['Movies', 'أفلام'],
+      'Series': ['Series', 'مسلسلات'],
+      'Anime': ['Anime', 'أنمي'],
+      'Documentaries': ['Documentaries', 'وثائقيات']
+    };
+    
+    const sectionNames = sectionMap[section] || ['Movies'];
+    
+    const results = await query(`
+      SELECT 
+        c.id, c.title, c.title_arabic, c.description, c.description_arabic,
+        c.genre, c.year, c.quality, c.rating, c.duration_minutes,
+        c.is_premium, c.is_trending, c.poster_url,
+        cs.name as section_name, cs.name_arabic as section_name_arabic
+      FROM content c
+      JOIN content_sections cs ON c.section_id = cs.id
+      WHERE c.is_active = true 
+      AND (cs.name = $1 OR cs.name_arabic = $2)
+      ORDER BY 
+        CASE WHEN c.is_trending THEN 1 ELSE 2 END,
+        c.rating DESC NULLS LAST,
+        c.created_at DESC
+      LIMIT 10
+    `, [sectionNames[0], sectionNames[1]]);
+    
+    if (results.rows.length === 0) {
+      return {
+        success: true,
+        response_type: 'text' as const,
+        message: language === 'ar' 
+          ? `❌ لا يوجد محتوى متاح في قسم ${sectionNames[1]}`
+          : `❌ No content available in ${section} section`,
+        chat_id: chatId
+      };
+    }
+    
+    if (results.rows.length === 1) {
+      // Single result - show detailed card
+      const content = results.rows[0];
+      return {
+        success: true,
+        response_type: 'photo' as const,
+        message: formatContentCard(content, language),
+        photo_url: content.poster_url,
+        keyboard: getContentKeyboard(content.id, language),
+        chat_id: chatId
+      };
+    } else {
+      // Multiple results - show list
+      return {
+        success: true,
+        response_type: 'keyboard' as const,
+        message: formatContentList(results.rows, 1, 1, language),
+        keyboard: getSearchResultsKeyboard(results.rows.slice(0, 5), language),
+        chat_id: chatId
+      };
+    }
+  } catch (error) {
+    console.error('Section content error:', error);
+    return {
+      success: true,
+      response_type: 'text' as const,
+      message: language === 'ar' ? '⚠️ حدث خطأ في تحميل المحتوى.' : '⚠️ Error loading content.',
+      chat_id: chatId
+    };
+  }
 }
 
 async function handlePremiumCommand(userId: number, chatId: number, language: 'ar' | 'en') {
-  const message = language === 'ar'
-    ? '🏆 **الاشتراك المميز**\n\n✨ **المزايا:**\n• محتوى حصري عالي الجودة\n• وصول مبكر للإصدارات الجديدة\n• بدون إعلانات\n• دعم فني مميز\n\n💳 للاشتراك، تواصل مع الإدارة.'
-    : '🏆 **Premium Subscription**\n\n✨ **Benefits:**\n• Exclusive high-quality content\n• Early access to new releases\n• Ad-free experience\n• Priority support\n\n💳 Contact admin to subscribe.';
-  
-  return {
-    success: true,
-    response_type: 'text' as const,
-    message,
-    chat_id: chatId
-  };
+  try {
+    // Check user subscription status
+    const userInfo = await query(`
+      SELECT subscription_status, subscription_expires_at 
+      FROM users 
+      WHERE telegram_id = $1
+    `, [userId]);
+    
+    const isSubscribed = userInfo.rows.length > 0 && 
+                        userInfo.rows[0].subscription_status !== 'free';
+    
+    if (isSubscribed) {
+      // Show premium content for subscribed users
+      const premiumResults = await query(`
+        SELECT 
+          c.id, c.title, c.title_arabic, c.description, c.description_arabic,
+          c.genre, c.year, c.quality, c.rating, c.duration_minutes,
+          c.is_premium, c.is_trending, c.poster_url,
+          cs.name as section_name, cs.name_arabic as section_name_arabic
+        FROM content c
+        JOIN content_sections cs ON c.section_id = cs.id
+        WHERE c.is_active = true AND c.is_premium = true
+        ORDER BY c.created_at DESC
+        LIMIT 5
+      `);
+      
+      if (premiumResults.rows.length === 0) {
+        return {
+          success: true,
+          response_type: 'text' as const,
+          message: language === 'ar' 
+            ? '🏆 أنت مشترك مميز!\n\n❌ لا يوجد محتوى مميز حالياً.\nسيتم إضافة محتوى جديد قريباً.'
+            : '🏆 You have premium access!\n\n❌ No premium content available currently.\nNew content will be added soon.',
+          chat_id: chatId
+        };
+      }
+      
+      return {
+        success: true,
+        response_type: 'keyboard' as const,
+        message: (language === 'ar' 
+          ? '🏆 المحتوى المميز الخاص بك:\n\n' 
+          : '🏆 Your Premium Content:\n\n') + formatContentList(premiumResults.rows, 1, 1, language),
+        keyboard: getSearchResultsKeyboard(premiumResults.rows, language),
+        chat_id: chatId
+      };
+    } else {
+      // Show subscription info for non-subscribers
+      const keyboard = [
+        [
+          { text: language === 'ar' ? '💳 طرق الاشتراك' : '💳 Subscribe Now', callback_data: 'premium_subscribe' },
+          { text: language === 'ar' ? '💰 الأسعار' : '💰 Pricing', callback_data: 'premium_pricing' }
+        ],
+        [
+          { text: language === 'ar' ? '🎬 معاينة المحتوى' : '🎬 Preview Content', callback_data: 'premium_preview' }
+        ],
+        [
+          { text: language === 'ar' ? '🔙 العودة' : '🔙 Back', callback_data: 'back_main' }
+        ]
+      ];
+      
+      const message = language === 'ar'
+        ? '🏆 **الاشتراك المميز**\n\n✨ **المزايا:**\n• محتوى حصري عالي الجودة 4K\n• وصول مبكر للإصدارات الجديدة\n• تحميل بسرعة عالية\n• بدون إعلانات\n• دعم فني على مدار الساعة\n• محتوى متعدد اللغات\n\n💎 **الاشتراك الشهري:** $9.99\n💎 **الاشتراك السنوي:** $99.99 (وفر 17%)'
+        : '🏆 **Premium Subscription**\n\n✨ **Benefits:**\n• Exclusive 4K high-quality content\n• Early access to new releases\n• High-speed downloads\n• Ad-free experience\n• 24/7 priority support\n• Multi-language content\n\n💎 **Monthly:** $9.99\n💎 **Yearly:** $99.99 (Save 17%)';
+      
+      return {
+        success: true,
+        response_type: 'keyboard' as const,
+        message,
+        keyboard,
+        chat_id: chatId
+      };
+    }
+  } catch (error) {
+    console.error('Premium command error:', error);
+    return {
+      success: true,
+      response_type: 'text' as const,
+      message: language === 'ar' ? '⚠️ حدث خطأ في تحميل معلومات الاشتراك.' : '⚠️ Error loading subscription info.',
+      chat_id: chatId
+    };
+  }
 }
 
 async function handleAdminCommand(userId: number, chatId: number, language: 'ar' | 'en') {
-  const message = language === 'ar'
-    ? '👨‍💼 **لوحة تحكم المدراء**\n\n⚙️ الأوامر متاحة قريباً:\n• إدارة المحتوى\n• إدارة المستخدمين\n• الإحصائيات\n• الإعدادات'
-    : '👨‍💼 **Admin Control Panel**\n\n⚙️ Commands coming soon:\n• Content management\n• User management\n• Statistics\n• Settings';
-  
-  return {
-    success: true,
-    response_type: 'text' as const,
-    message,
-    chat_id: chatId
-  };
+  try {
+    // Verify admin status
+    const userInfo = await query(`
+      SELECT role FROM users WHERE telegram_id = $1
+    `, [userId]);
+    
+    if (userInfo.rows.length === 0 || !['admin', 'owner'].includes(userInfo.rows[0].role)) {
+      return {
+        success: true,
+        response_type: 'text' as const,
+        message: language === 'ar' ? '❌ هذا الأمر متاح للمدراء فقط!' : '❌ This command is for admins only!',
+        chat_id: chatId
+      };
+    }
+    
+    // Get quick stats for admin dashboard
+    const stats = await query(`
+      SELECT 
+        (SELECT COUNT(*) FROM users) as total_users,
+        (SELECT COUNT(*) FROM content WHERE is_active = true) as total_content,
+        (SELECT COUNT(*) FROM users WHERE last_activity > NOW() - INTERVAL '24 hours') as active_users,
+        (SELECT COUNT(*) FROM content WHERE is_trending = true) as trending_content
+    `);
+    
+    const statsData = stats.rows[0];
+    
+    const keyboard = [
+      [
+        { text: language === 'ar' ? '👥 إدارة المستخدمين' : '👥 User Management', callback_data: 'dashboard_users' },
+        { text: language === 'ar' ? '🎬 إدارة المحتوى' : '🎬 Content Management', callback_data: 'dashboard_content' }
+      ],
+      [
+        { text: language === 'ar' ? '📊 الإحصائيات' : '📊 Analytics', callback_data: 'dashboard_analytics' },
+        { text: language === 'ar' ? '⚙️ الإعدادات' : '⚙️ Settings', callback_data: 'dashboard_system' }
+      ],
+      [
+        { text: language === 'ar' ? '🔔 الإشعارات' : '🔔 Notifications', callback_data: 'dashboard_notifications' },
+        { text: language === 'ar' ? '🛡️ الأمان' : '🛡️ Security', callback_data: 'dashboard_security' }
+      ],
+      [
+        { text: language === 'ar' ? '📈 التقارير' : '📈 Reports', callback_data: 'dashboard_reports' },
+        { text: language === 'ar' ? '💰 الإيرادات' : '💰 Revenue', callback_data: 'dashboard_revenue' }
+      ],
+      [
+        { text: language === 'ar' ? '🔙 العودة' : '🔙 Back', callback_data: 'back_main' }
+      ]
+    ];
+    
+    const message = language === 'ar'
+      ? `👨‍💼 **لوحة تحكم المدراء**\n\n📊 **إحصائيات سريعة:**\n👥 إجمالي المستخدمين: ${statsData.total_users}\n🎬 المحتوى النشط: ${statsData.total_content}\n⚡ المستخدمون النشطون: ${statsData.active_users}\n🔥 المحتوى الرائج: ${statsData.trending_content}\n\n⚡ **الوصول السريع:**`
+      : `👨‍💼 **Admin Control Panel**\n\n📊 **Quick Stats:**\n👥 Total Users: ${statsData.total_users}\n🎬 Active Content: ${statsData.total_content}\n⚡ Active Users: ${statsData.active_users}\n🔥 Trending Content: ${statsData.trending_content}\n\n⚡ **Quick Access:**`;
+    
+    return {
+      success: true,
+      response_type: 'keyboard' as const,
+      message,
+      keyboard,
+      chat_id: chatId
+    };
+  } catch (error) {
+    console.error('Admin command error:', error);
+    return {
+      success: true,
+      response_type: 'text' as const,
+      message: language === 'ar' ? '⚠️ حدث خطأ في تحميل لوحة الإدارة.' : '⚠️ Error loading admin panel.',
+      chat_id: chatId
+    };
+  }
 }
