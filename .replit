@@ -10,8 +10,8 @@ channel = "stable-25_05"
 packages = ["jq"]
 
 [deployment]
-build = ["bash", "scripts/build.sh"]
-run = ["npm", "run", "dev"]
+build = ["npm", "run", "build"]
+run = ["bash", "-c", "npm run dev & ./scripts/inngest.sh"]
 deploymentTarget = "vm"
 
 [[ports]]
