@@ -142,7 +142,7 @@ async function handleMessage(message: TelegramMessage, logger: any) {
   const chatId = message.chat.id;
   const text = message.text || '';
   const userName = message.from?.first_name || 'المستخدم';
-  const language = message.from?.language_code?.startsWith('ar') ? 'ar' : 'ar'; // Default to Arabic
+  const language = await getUserLanguage(userId, message.from?.language_code);
   
   if (!userId) {
     return {
@@ -421,10 +421,22 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery, logger:
   if (data.startsWith('lang_')) {
     const lang = data.split('_')[1] as 'ar' | 'en';
     await updateUserLanguage(userId, lang);
+    
+    // Send confirmation message in the NEW language
+    const confirmationMessage = lang === 'ar' ? '✅ تم تغيير اللغة إلى العربية' : '✅ Language changed to English';
+    
+    // Create welcome message in the new language to immediately show the change
+    const welcomeMessage = lang === 'ar' 
+      ? `🎬 <b>مرحباً بك في بوت السينما العربية</b>\n\n✨ تم تحديث اللغة بنجاح! اختر من الخيارات أدناه:`
+      : `🎬 <b>Welcome to Arabic Cinema Bot</b>\n\n✨ Language updated successfully! Choose from the options below:`;
+      
+    const keyboard = getMainKeyboard(lang);
+    
     return {
       success: true,
-      response_type: 'text' as const,
-      message: lang === 'ar' ? '✅ تم تغيير اللغة إلى العربية' : '✅ Language changed to English',
+      response_type: 'keyboard' as const,
+      message: `${confirmationMessage}\n\n${welcomeMessage}`,
+      keyboard: keyboard,
       chat_id: chatId
     };
   }
@@ -594,6 +606,33 @@ async function updateUserLanguage(telegramId: number, language: string) {
   } catch (error) {
     console.error('Error updating user language:', error);
   }
+}
+
+async function getUserLanguage(telegramId?: number, fallbackLanguageCode?: string): Promise<'ar' | 'en'> {
+  // First check database for user's stored preference
+  if (telegramId) {
+    try {
+      const result = await query(
+        'SELECT language_preference FROM users WHERE telegram_id = $1',
+        [telegramId]
+      );
+      
+      if (result.rows.length > 0 && result.rows[0].language_preference) {
+        const storedLang = result.rows[0].language_preference;
+        return storedLang === 'en' ? 'en' : 'ar'; // Default to Arabic for any unexpected values
+      }
+    } catch (error) {
+      console.error('Error getting user language from database:', error);
+    }
+  }
+  
+  // Fall back to Telegram language code
+  if (fallbackLanguageCode?.startsWith('ar')) {
+    return 'ar';
+  }
+  
+  // Final default to Arabic (this is an Arabic cinema bot)
+  return 'ar';
 }
 
 async function showContentDetails(contentId: number, chatId: number, language: 'ar' | 'en') {

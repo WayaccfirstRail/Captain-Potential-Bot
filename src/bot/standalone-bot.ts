@@ -59,7 +59,7 @@ export function startCinemaBot() {
   bot.onText(/\/start/, async (msg: Message) => {
     const chatId = msg.chat.id;
     const userName = msg.from?.first_name || 'المستخدم';
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     // Ensure user exists in database
     if (msg.from) {
@@ -78,7 +78,7 @@ export function startCinemaBot() {
   // Handle /help command
   bot.onText(/\/help/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     const helpMessage = getHelpMessage(language);
     await bot.sendMessage(chatId, helpMessage, {
@@ -90,7 +90,7 @@ export function startCinemaBot() {
   bot.onText(/\/search (.+)/, async (msg: Message, match: RegExpExecArray | null) => {
     const chatId = msg.chat.id;
     const searchTerm = match?.[1];
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     if (!searchTerm) {
       await bot.sendMessage(chatId, language === 'ar' 
@@ -106,7 +106,7 @@ export function startCinemaBot() {
   // Handle /trending command
   bot.onText(/\/trending/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleTrendingCommand(chatId, language);
   });
@@ -114,7 +114,7 @@ export function startCinemaBot() {
   // Handle /movies command
   bot.onText(/\/movies/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSectionQuery(chatId, 'movies', language);
   });
@@ -122,7 +122,7 @@ export function startCinemaBot() {
   // Handle /series command
   bot.onText(/\/series/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSectionQuery(chatId, 'series', language);
   });
@@ -130,7 +130,7 @@ export function startCinemaBot() {
   // Handle /anime command
   bot.onText(/\/anime/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSectionQuery(chatId, 'anime', language);
   });
@@ -138,7 +138,7 @@ export function startCinemaBot() {
   // Handle /docs command
   bot.onText(/\/docs/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSectionQuery(chatId, 'docs', language);
   });
@@ -146,7 +146,7 @@ export function startCinemaBot() {
   // Handle /latest command
   bot.onText(/\/latest/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleLatestCommand(chatId, language);
   });
@@ -154,7 +154,7 @@ export function startCinemaBot() {
   // Handle /sections command
   bot.onText(/\/sections/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSectionsCommand(chatId, language);
   });
@@ -163,7 +163,7 @@ export function startCinemaBot() {
   bot.onText(/\/profile/, async (msg: Message) => {
     const chatId = msg.chat.id;
     const userId = msg.from?.id || 0;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleProfileCommand(chatId, userId, language);
   });
@@ -171,7 +171,7 @@ export function startCinemaBot() {
   // Handle /language command
   bot.onText(/\/language/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await showLanguageSelector(chatId, language);
   });
@@ -179,7 +179,7 @@ export function startCinemaBot() {
   // Handle /premium command (user version)
   bot.onText(/\/premium/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handlePremiumQuery(chatId, language);
   });
@@ -187,7 +187,7 @@ export function startCinemaBot() {
   // Handle /feedback command
   bot.onText(/\/feedback/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleFeedbackCommand(chatId, language);
   });
@@ -195,7 +195,7 @@ export function startCinemaBot() {
   // Handle /support command
   bot.onText(/\/support/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleSupportCommand(chatId, language);
   });
@@ -203,7 +203,7 @@ export function startCinemaBot() {
   // Handle /about command
   bot.onText(/\/about/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     await handleAboutCommand(chatId, language);
   });
@@ -268,7 +268,7 @@ export function startCinemaBot() {
   bot.on('message', async (msg: Message) => {
     const chatId = msg.chat.id;
     const text = msg.text || '';
-    const language = getUserLanguage(msg.from?.language_code);
+    const language = await getUserLanguage(msg.from?.id, msg.from?.language_code);
     
     // Skip if it's a command
     if (text.startsWith('/')) return;
@@ -302,7 +302,7 @@ export function startCinemaBot() {
   bot.on('callback_query', async (callbackQuery: CallbackQuery) => {
     const chatId = callbackQuery.message?.chat.id;
     const data = callbackQuery.data || '';
-    const language = getUserLanguage(callbackQuery.from.language_code);
+    const language = await getUserLanguage(callbackQuery.from.id, callbackQuery.from.language_code);
     
     if (!chatId) return;
     
@@ -344,9 +344,22 @@ export function startCinemaBot() {
         const lang = data.split('_')[1] as 'ar' | 'en';
         if (callbackQuery.from.id) {
           await updateUserLanguage(callbackQuery.from.id, lang);
+          
+          // Send confirmation message in the NEW language
           await bot.sendMessage(chatId, 
             lang === 'ar' ? '✅ تم تغيير اللغة إلى العربية' : '✅ Language changed to English'
           );
+          
+          // Immediately show the main menu in the new language to apply the change
+          const welcomeMessage = lang === 'ar' 
+            ? `🎬 <b>مرحباً بك في بوت السينما العربية</b>\n\n✨ تم تحديث اللغة بنجاح! اختر من الخيارات أدناه:`
+            : `🎬 <b>Welcome to Arabic Cinema Bot</b>\n\n✨ Language updated successfully! Choose from the options below:`;
+            
+          const keyboard = getMainKeyboard(lang);
+          await bot.sendMessage(chatId, welcomeMessage, {
+            reply_markup: { inline_keyboard: keyboard },
+            parse_mode: 'HTML'
+          });
         }
       } else if (data === 'trending') {
         await handleTrendingCommand(chatId, language);
@@ -599,8 +612,31 @@ async function showContentDetails(chatId: number, contentId: number, language: '
 }
 
 // Helper functions
-function getUserLanguage(languageCode?: string): 'ar' | 'en' {
-  return languageCode?.startsWith('ar') ? 'ar' : 'en'; // Default to English for non-Arabic users
+async function getUserLanguage(telegramId?: number, fallbackLanguageCode?: string): Promise<'ar' | 'en'> {
+  // First check database for user's stored preference
+  if (telegramId) {
+    try {
+      const result = await query(
+        'SELECT language_preference FROM users WHERE telegram_id = $1',
+        [telegramId]
+      );
+      
+      if (result.rows.length > 0 && result.rows[0].language_preference) {
+        const storedLang = result.rows[0].language_preference;
+        return storedLang === 'en' ? 'en' : 'ar'; // Default to Arabic for any unexpected values
+      }
+    } catch (error) {
+      console.error('Error getting user language from database:', error);
+    }
+  }
+  
+  // Fall back to Telegram language code
+  if (fallbackLanguageCode?.startsWith('ar')) {
+    return 'ar';
+  }
+  
+  // Final default to Arabic (this is an Arabic cinema bot)
+  return 'ar';
 }
 
 function getMainKeyboard(language: 'ar' | 'en') {
