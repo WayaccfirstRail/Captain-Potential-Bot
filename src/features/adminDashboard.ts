@@ -721,12 +721,169 @@ export class AdminDashboard {
     }
   }
 
-  // Placeholder methods for UI components
+  // Security monitoring implementation
   private async showSecurityMonitoring(chatId: number): Promise<void> {
-    await this.bot.sendMessage(chatId, 
-      '🛡️ <b>مراقبة الأمان</b>\n\nقريباً - نظام مراقبة الأمان المتقدم.',
-      { parse_mode: 'HTML' }
-    );
+    try {
+      // Get comprehensive security statistics
+      const securityStats = await this.getDetailedSecurityStats();
+      
+      const keyboard = [
+        [
+          { text: '🚫 إدارة المحظورين', callback_data: 'security_banned_management' },
+          { text: '⚠️ المستخدمون المشبوهون', callback_data: 'security_suspicious_users' }
+        ],
+        [
+          { text: '📊 إحصائيات مفصلة', callback_data: 'security_detailed_stats' },
+          { text: '📋 سجل الأحداث الأمنية', callback_data: 'security_event_log' }
+        ],
+        [
+          { text: '🎯 القواعد التلقائية', callback_data: 'security_auto_rules' },
+          { text: '🔍 البحث عن مستخدم', callback_data: 'security_user_search' }
+        ],
+        [
+          { text: '📈 تقارير الأمان', callback_data: 'security_reports' },
+          { text: '⚙️ إعدادات الأمان', callback_data: 'security_settings' }
+        ],
+        [
+          { text: '🔄 تحديث البيانات', callback_data: 'security_refresh' },
+          { text: '🔙 العودة للقائمة الرئيسية', callback_data: 'dashboard_main' }
+        ]
+      ];
+
+      let message = '🛡️ <b>نظام مراقبة الأمان المتقدم</b>\n\n';
+      
+      // Current Security Status
+      message += '📊 <b>الحالة الأمنية الحالية:</b>\n';
+      message += `🚫 المستخدمون المحظورون: <b>${securityStats.totalBanned}</b>\n`;
+      message += `⚠️ التحذيرات النشطة: <b>${securityStats.activeWarnings}</b>\n`;
+      message += `👁️ المستخدمون المراقبون: <b>${securityStats.watchedUsers}</b>\n`;
+      message += `🔥 الأنشطة المشبوهة (24س): <b>${securityStats.suspiciousActivities24h}</b>\n\n`;
+      
+      // Recent Security Events
+      message += '🔍 <b>الأحداث الأمنية الأخيرة:</b>\n';
+      if (securityStats.recentEvents.length > 0) {
+        securityStats.recentEvents.forEach((event: any, index: number) => {
+          if (index < 3) { // Show only top 3 recent events
+            const eventTime = new Date(event.created_at).toLocaleString('ar-SA', {
+              timeZone: 'Asia/Riyadh'
+            });
+            message += `• ${this.getSecurityEventEmoji(event.event_type)} ${event.event_type} - ${eventTime}\n`;
+          }
+        });
+      } else {
+        message += '• <i>لا توجد أحداث أمنية حديثة</i>\n';
+      }
+      
+      message += '\n';
+      
+      // System Security Health
+      const healthScore = this.calculateSecurityHealth(securityStats);
+      message += `🛡️ <b>مؤشر الأمان العام:</b> ${this.getHealthIndicator(healthScore)} <b>${healthScore}%</b>\n`;
+      message += `📅 <b>آخر مراجعة أمنية:</b> ${new Date().toLocaleDateString('ar-SA')}\n\n`;
+      
+      message += '<i>اختر الإجراء المطلوب من الأزرار أدناه</i>';
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing security monitoring:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عرض نظام مراقبة الأمان. يرجى المحاولة مرة أخرى.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  private async getDetailedSecurityStats(): Promise<any> {
+    try {
+      // Get banned users count
+      const bannedUsersResult = await query(`
+        SELECT COUNT(*) as total_banned FROM users WHERE is_banned = true
+      `);
+      
+      // Get active warnings (from user_behavior_logs)
+      const warningsResult = await query(`
+        SELECT COUNT(*) as active_warnings 
+        FROM user_behavior_logs 
+        WHERE severity IN ('medium', 'high', 'critical') 
+        AND is_reviewed = false
+      `);
+      
+      // Get watched users (users with recent behavior logs)
+      const watchedUsersResult = await query(`
+        SELECT COUNT(DISTINCT user_id) as watched_users 
+        FROM user_behavior_logs 
+        WHERE created_at > NOW() - INTERVAL '7 days'
+      `);
+      
+      // Get suspicious activities in last 24 hours
+      const suspiciousResult = await query(`
+        SELECT COUNT(*) as suspicious_24h 
+        FROM user_behavior_logs 
+        WHERE severity IN ('high', 'critical') 
+        AND created_at > NOW() - INTERVAL '24 hours'
+      `);
+      
+      // Get recent security events
+      const recentEventsResult = await query(`
+        SELECT action_type as event_type, created_at 
+        FROM admin_activity_logs 
+        WHERE action_type IN ('ban_user', 'unban_user', 'security_warning', 'suspicious_activity')
+        ORDER BY created_at DESC 
+        LIMIT 5
+      `);
+
+      return {
+        totalBanned: bannedUsersResult.rows[0]?.total_banned || 0,
+        activeWarnings: warningsResult.rows[0]?.active_warnings || 0,
+        watchedUsers: watchedUsersResult.rows[0]?.watched_users || 0,
+        suspiciousActivities24h: suspiciousResult.rows[0]?.suspicious_24h || 0,
+        recentEvents: recentEventsResult.rows || []
+      };
+    } catch (error) {
+      console.error('Error getting detailed security stats:', error);
+      return {
+        totalBanned: 0,
+        activeWarnings: 0,
+        watchedUsers: 0,
+        suspiciousActivities24h: 0,
+        recentEvents: []
+      };
+    }
+  }
+
+  private getSecurityEventEmoji(eventType: string): string {
+    const eventEmojis: { [key: string]: string } = {
+      'ban_user': '🚫',
+      'unban_user': '✅',
+      'security_warning': '⚠️',
+      'suspicious_activity': '🔍',
+      'failed_login': '🚨',
+      'spam_detected': '📢',
+      'default': '🔒'
+    };
+    return eventEmojis[eventType] || eventEmojis['default'];
+  }
+
+  private calculateSecurityHealth(stats: any): number {
+    // Calculate security health score based on various metrics
+    let score = 100;
+    
+    // Deduct points for security issues
+    score -= Math.min(stats.totalBanned * 2, 20); // Max 20 points deduction for bans
+    score -= Math.min(stats.activeWarnings * 5, 30); // Max 30 points for warnings
+    score -= Math.min(stats.suspiciousActivities24h * 3, 25); // Max 25 points for suspicious activities
+    
+    return Math.max(score, 0);
+  }
+
+  private getHealthIndicator(score: number): string {
+    if (score >= 90) return '🟢';
+    if (score >= 70) return '🟡';
+    if (score >= 50) return '🟠';
+    return '🔴';
   }
 
   private async showAdvancedAnalytics(chatId: number): Promise<void> {
@@ -737,10 +894,134 @@ export class AdminDashboard {
   }
 
   private async showSystemSettings(chatId: number): Promise<void> {
-    await this.bot.sendMessage(chatId, 
-      '⚙️ <b>إعدادات النظام</b>\n\nقريباً - إعدادات النظام الشاملة.',
-      { parse_mode: 'HTML' }
-    );
+    try {
+      // Get current bot settings
+      const settings = await this.getBotSettings();
+      
+      const keyboard = [
+        [
+          { text: '🔧 إعدادات عامة', callback_data: 'settings_general' },
+          { text: '🛡️ إعدادات الأمان', callback_data: 'settings_security' }
+        ],
+        [
+          { text: '📢 إعدادات الإشعارات', callback_data: 'settings_notifications' },
+          { text: '🎯 إعدادات القنوات', callback_data: 'settings_channels' }
+        ],
+        [
+          { text: '💰 إعدادات الدفع', callback_data: 'settings_payment' },
+          { text: '🎬 إعدادات المحتوى', callback_data: 'settings_content' }
+        ],
+        [
+          { text: '📊 إعدادات التحليلات', callback_data: 'settings_analytics' },
+          { text: '🗄️ إعدادات قاعدة البيانات', callback_data: 'settings_database' }
+        ],
+        [
+          { text: '💾 حفظ التغييرات', callback_data: 'settings_save' },
+          { text: '🔄 إعادة تعيين', callback_data: 'settings_reset' }
+        ],
+        [
+          { text: '📤 تصدير الإعدادات', callback_data: 'settings_export' },
+          { text: '🔙 العودة للقائمة الرئيسية', callback_data: 'dashboard_main' }
+        ]
+      ];
+
+      let message = '⚙️ <b>إعدادات النظام الشاملة</b>\n\n';
+      
+      // Current Settings Overview
+      message += '📊 <b>الإعدادات الحالية:</b>\n';
+      message += `🔄 الإعادة التوجيه التلقائي: ${settings.auto_forward_enabled ? '✅ مفعل' : '❌ معطل'}\n`;
+      message += `🎭 القسم الشائع: ${settings.trending_enabled ? '✅ مفعل' : '❌ معطل'}\n`;
+      message += `🔔 نوع الإشعارات: ${this.getNotificationTypeText(settings.owner_notification_type)}\n`;
+      message += `⚡ الحد الأقصى للإجراءات/ساعة: ${settings.max_admin_actions_per_hour}\n\n`;
+      
+      // Channel Configuration
+      message += '📡 <b>إعداد القنوات:</b>\n';
+      message += `💎 قناة المحتوى المميز: ${settings.premium_channel_id || '<i>غير محدد</i>'}\n`;
+      message += `🔔 قناة الإشعارات: ${settings.notification_channel_id || '<i>غير محدد</i>'}\n\n`;
+      
+      // System Status
+      message += '🖥️ <b>حالة النظام:</b>\n';
+      message += `📈 حالة البوت: 🟢 نشط\n`;
+      message += `💾 حالة قاعدة البيانات: ${await this.getDatabaseStatus()}\n`;
+      message += `📅 آخر تحديث: ${new Date().toLocaleDateString('ar-SA')}\n\n`;
+      
+      message += '<i>اختر الإعداد المراد تعديله من القائمة أدناه</i>';
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing system settings:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عرض إعدادات النظام. يرجى المحاولة مرة أخرى.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  private async getBotSettings(): Promise<any> {
+    try {
+      const settingsResult = await query(`
+        SELECT setting_key, setting_value, setting_type 
+        FROM bot_settings 
+        WHERE setting_key IN ('auto_forward_enabled', 'trending_enabled', 'owner_notification_type', 
+                              'max_admin_actions_per_hour', 'premium_channel_id', 'notification_channel_id')
+      `);
+      
+      const settings: any = {};
+      settingsResult.rows.forEach(row => {
+        const value = row.setting_value;
+        // Convert string values to appropriate types
+        if (row.setting_type === 'boolean') {
+          settings[row.setting_key] = value === 'true';
+        } else if (row.setting_type === 'number') {
+          settings[row.setting_key] = parseInt(value) || 0;
+        } else {
+          settings[row.setting_key] = value;
+        }
+      });
+      
+      // Set defaults for missing settings
+      return {
+        auto_forward_enabled: settings.auto_forward_enabled || false,
+        trending_enabled: settings.trending_enabled || true,
+        owner_notification_type: settings.owner_notification_type || 'dm',
+        max_admin_actions_per_hour: settings.max_admin_actions_per_hour || 50,
+        premium_channel_id: settings.premium_channel_id || '',
+        notification_channel_id: settings.notification_channel_id || ''
+      };
+    } catch (error) {
+      console.error('Error getting bot settings:', error);
+      return {
+        auto_forward_enabled: false,
+        trending_enabled: true,
+        owner_notification_type: 'dm',
+        max_admin_actions_per_hour: 50,
+        premium_channel_id: '',
+        notification_channel_id: ''
+      };
+    }
+  }
+
+  private getNotificationTypeText(type: string): string {
+    switch (type) {
+      case 'dm': return '💬 رسائل مباشرة';
+      case 'channel': return '📢 قناة الإشعارات';
+      case 'both': return '📱 الكل';
+      default: return '❓ غير محدد';
+    }
+  }
+
+  private async getDatabaseStatus(): Promise<string> {
+    try {
+      // Test database connection with a simple query
+      await query('SELECT 1');
+      return '🟢 متصل';
+    } catch (error) {
+      console.error('Database connection error:', error);
+      return '🔴 خطأ في الاتصال';
+    }
   }
 
   private async showDailyReports(chatId: number): Promise<void> {

@@ -581,13 +581,200 @@ export class CrossChannelEnforcement {
     }
   }
 
-  // Placeholder methods for UI components
+  // User ban management methods
   private async startUserBanProcess(chatId: number, userId: number): Promise<void> {
-    await this.bot.sendMessage(chatId,
-      '🚫 <b>حظر مستخدم</b>\n\n' +
-      '✍️ أرسل معرف المستخدم أو اسم المستخدم ليتم حظره:',
-      { parse_mode: 'HTML' }
-    );
+    try {
+      const keyboard = [
+        [
+          { text: '🆔 حظر بمعرف المستخدم', callback_data: 'ban_by_user_id' },
+          { text: '📞 حظر برقم التلجرام', callback_data: 'ban_by_telegram_id' }
+        ],
+        [
+          { text: '👤 حظر باسم المستخدم', callback_data: 'ban_by_username' },
+          { text: '🔍 البحث ثم الحظر', callback_data: 'ban_search_first' }
+        ],
+        [
+          { text: '⚠️ إصدار تحذير فقط', callback_data: 'issue_warning_only' },
+          { text: '🕒 حظر مؤقت', callback_data: 'ban_temporary' }
+        ],
+        [
+          { text: '🚫 حظر دائم', callback_data: 'ban_permanent' },
+          { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+        ]
+      ];
+
+      const message = `🚫 <b>نظام حظر المستخدمين</b>\n\n` +
+                     `⚡ <b>خيارات الحظر المتاحة:</b>\n\n` +
+                     `🆔 <b>حظر بمعرف المستخدم:</b> استخدم رقم المعرف الداخلي للنظام\n` +
+                     `📞 <b>حظر برقم التلجرام:</b> استخدم معرف التلجرام الفريد\n` +
+                     `👤 <b>حظر باسم المستخدم:</b> استخدم اسم المستخدم (@username)\n` +
+                     `🔍 <b>البحث ثم الحظر:</b> ابحث عن المستخدم أولاً ثم احظره\n\n` +
+                     `📋 <b>أنواع الحظر:</b>\n` +
+                     `⚠️ <b>تحذير:</b> إرسال تحذير دون حظر فعلي\n` +
+                     `🕒 <b>مؤقت:</b> حظر لفترة محددة\n` +
+                     `🚫 <b>دائم:</b> حظر دائم من جميع القنوات\n\n` +
+                     `<i>اختر طريقة الحظر المناسبة من الأزرار أدناه</i>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error starting user ban process:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عملية حظر المستخدم.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Process user ban with different methods
+   */
+  async processBanUser(banType: string, targetIdentifier: string, chatId: number, adminId: number, reason?: string, duration?: number): Promise<void> {
+    try {
+      let targetUserId: number | null = null;
+      let telegramUserId: number | null = null;
+      let userInfo: any = null;
+
+      // Find user by different identifiers
+      switch (banType) {
+        case 'by_user_id':
+          const userByIdResult = await query('SELECT * FROM users WHERE id = $1', [parseInt(targetIdentifier)]);
+          if (userByIdResult.rows.length > 0) {
+            userInfo = userByIdResult.rows[0];
+            targetUserId = userInfo.id;
+            telegramUserId = userInfo.telegram_id;
+          }
+          break;
+
+        case 'by_telegram_id':
+          const userByTelegramResult = await query('SELECT * FROM users WHERE telegram_id = $1', [parseInt(targetIdentifier)]);
+          if (userByTelegramResult.rows.length > 0) {
+            userInfo = userByTelegramResult.rows[0];
+            targetUserId = userInfo.id;
+            telegramUserId = userInfo.telegram_id;
+          }
+          break;
+
+        case 'by_username':
+          const cleanUsername = targetIdentifier.replace('@', '');
+          const userByUsernameResult = await query('SELECT * FROM users WHERE username ILIKE $1', [cleanUsername]);
+          if (userByUsernameResult.rows.length > 0) {
+            userInfo = userByUsernameResult.rows[0];
+            targetUserId = userInfo.id;
+            telegramUserId = userInfo.telegram_id;
+          }
+          break;
+      }
+
+      if (!userInfo || !telegramUserId) {
+        await this.bot.sendMessage(chatId, 
+          `❌ <b>لم يتم العثور على المستخدم</b>\n\nالمعرف المدخل: <code>${targetIdentifier}</code>\n\nتأكد من صحة البيانات وحاول مرة أخرى.`,
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      // Check if user is already banned
+      if (userInfo.is_banned) {
+        await this.bot.sendMessage(chatId, 
+          `⚠️ <b>المستخدم محظور بالفعل</b>\n\n` +
+          `👤 الاسم: ${userInfo.first_name}\n` +
+          `🆔 المعرف: ${userInfo.id}\n` +
+          `📝 سبب الحظر السابق: ${userInfo.banned_reason || 'غير محدد'}\n\n` +
+          `هل تريد تعديل الحظر أم إلغاؤه؟`,
+          { parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✏️ تعديل سبب الحظر', callback_data: `edit_ban_${userInfo.id}` },
+                  { text: '✅ إلغاء الحظر', callback_data: `unban_user_${userInfo.id}` }
+                ],
+                [
+                  { text: '🔙 رجوع', callback_data: 'security_ban_user' }
+                ]
+              ]
+            }
+          }
+        );
+        return;
+      }
+
+      // Show user confirmation before banning
+      await this.showBanConfirmation(chatId, userInfo, banType, reason, duration, adminId);
+
+    } catch (error) {
+      console.error('Error processing ban user:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في معالجة طلب الحظر. يرجى المحاولة مرة أخرى.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  private async showBanConfirmation(chatId: number, userInfo: any, banType: string, reason?: string, duration?: number, adminId?: number): Promise<void> {
+    try {
+      const banReasons = [
+        'إرسال محتوى مخل بالآداب',
+        'انتهاك قوانين القناة',
+        'إرسال رسائل مزعجة (سبام)',
+        'استخدام لغة غير لائقة',
+        'محاولة اختراق النظام',
+        'انتهاك حقوق الطبع والنشر',
+        'أخرى (سيتم تحديدها لاحقاً)'
+      ];
+
+      let keyboard = [
+        [
+          { text: '🚫 تأكيد الحظر الدائم', callback_data: `confirm_ban_permanent_${userInfo.id}_${adminId}` }
+        ],
+        [
+          { text: '🕒 حظر مؤقت (24 ساعة)', callback_data: `confirm_ban_temp_${userInfo.id}_24_${adminId}` },
+          { text: '🕒 حظر مؤقت (7 أيام)', callback_data: `confirm_ban_temp_${userInfo.id}_168_${adminId}` }
+        ],
+        [
+          { text: '⚠️ إرسال تحذير فقط', callback_data: `confirm_warning_${userInfo.id}_${adminId}` }
+        ]
+      ];
+
+      // Add reason selection
+      banReasons.forEach((reasonText, index) => {
+        keyboard.push([
+          { text: `📝 ${reasonText}`, callback_data: `ban_reason_${userInfo.id}_${index}_${adminId}` }
+        ]);
+      });
+
+      keyboard.push([
+        { text: '❌ إلغاء العملية', callback_data: 'security_ban_user' }
+      ]);
+
+      const lastActivity = userInfo.last_activity ? 
+        new Date(userInfo.last_activity).toLocaleString('ar-SA') : 'غير معروف';
+
+      const message = `🚫 <b>تأكيد حظر المستخدم</b>\n\n` +
+                     `👤 <b>معلومات المستخدم:</b>\n` +
+                     `• الاسم: ${userInfo.first_name} ${userInfo.last_name || ''}\n` +
+                     `• اسم المستخدم: @${userInfo.username || 'غير محدد'}\n` +
+                     `• المعرف الداخلي: ${userInfo.id}\n` +
+                     `• معرف التلجرام: ${userInfo.telegram_id}\n` +
+                     `• الدور: ${userInfo.role}\n` +
+                     `• العضوية: ${userInfo.subscription_status}\n` +
+                     `• آخر نشاط: ${lastActivity}\n\n` +
+                     `⚠️ <b>هذا الإجراء سيؤثر على:</b>\n` +
+                     `• حظر المستخدم من جميع القنوات المرتبطة\n` +
+                     `• منع المستخدم من الوصول للمحتوى\n` +
+                     `• إرسال إشعار للمستخدم بالحظر\n` +
+                     `• تسجيل الإجراء في سجل الأمان\n\n` +
+                     `<b>اختر نوع الحظر وسبب الحظر:</b>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing ban confirmation:', error);
+    }
   }
 
   private async showUnbanInterface(chatId: number): Promise<void> {
@@ -602,10 +789,233 @@ export class CrossChannelEnforcement {
   }
 
   private async startUserSearch(chatId: number): Promise<void> {
-    await this.bot.sendMessage(chatId, 
-      '🔍 <b>البحث عن مستخدم</b>\n\nأرسل معرف المستخدم أو اسم المستخدم للبحث:',
-      { parse_mode: 'HTML' }
-    );
+    try {
+      const keyboard = [
+        [
+          { text: '🆔 البحث بمعرف المستخدم', callback_data: 'search_by_id' },
+          { text: '👤 البحث باسم المستخدم', callback_data: 'search_by_username' }
+        ],
+        [
+          { text: '📞 البحث برقم التلجرام', callback_data: 'search_by_telegram_id' },
+          { text: '📋 عرض كل المستخدمين', callback_data: 'search_all_users' }
+        ],
+        [
+          { text: '🚫 المستخدمون المحظورون', callback_data: 'search_banned_users' },
+          { text: '💎 الأعضاء المميزون', callback_data: 'search_premium_users' }
+        ],
+        [
+          { text: '⚠️ المستخدمون النشطون حديثاً', callback_data: 'search_recent_users' },
+          { text: '🔙 رجوع', callback_data: 'security_management' }
+        ]
+      ];
+
+      const message = `🔍 <b>نظام البحث عن المستخدمين</b>\n\n` +
+                     `📊 <b>خيارات البحث المتاحة:</b>\n\n` +
+                     `🆔 <b>البحث بمعرف المستخدم:</b> ابحث باستخدام رقم المعرف الداخلي\n` +
+                     `👤 <b>البحث باسم المستخدم:</b> ابحث باستخدام اسم المستخدم او الاسم الأول\n` +
+                     `📞 <b>البحث برقم التلجرام:</b> ابحث باستخدام معرف التلجرام الفريد\n` +
+                     `📋 <b>عرض كل المستخدمين:</b> اعرض قائمة بآخر 20 مستخدم مسجل\n\n` +
+                     `<i>اختر نوع البحث المطلوب من الأزرار أدناه</i>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error starting user search:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في نظام البحث عن المستخدمين.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Search users by different criteria
+   */
+  async searchUsers(searchType: string, searchTerm: string, chatId: number): Promise<void> {
+    try {
+      let searchQuery = '';
+      let searchParams: any[] = [];
+      let resultsTitle = '';
+
+      switch (searchType) {
+        case 'by_id':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, subscription_status, created_at, last_activity
+            FROM users 
+            WHERE id = $1
+          `;
+          searchParams = [parseInt(searchTerm)];
+          resultsTitle = `🆔 نتائج البحث بالمعرف: ${searchTerm}`;
+          break;
+
+        case 'by_username':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, subscription_status, created_at, last_activity
+            FROM users 
+            WHERE (username ILIKE $1 OR first_name ILIKE $1 OR last_name ILIKE $1)
+            ORDER BY created_at DESC
+            LIMIT 10
+          `;
+          searchParams = [`%${searchTerm}%`];
+          resultsTitle = `👤 نتائج البحث بالاسم: "${searchTerm}"`;
+          break;
+
+        case 'by_telegram_id':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, subscription_status, created_at, last_activity
+            FROM users 
+            WHERE telegram_id = $1
+          `;
+          searchParams = [parseInt(searchTerm)];
+          resultsTitle = `📞 نتائج البحث برقم التلجرام: ${searchTerm}`;
+          break;
+
+        case 'all_users':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, subscription_status, created_at, last_activity
+            FROM users 
+            ORDER BY created_at DESC
+            LIMIT 20
+          `;
+          searchParams = [];
+          resultsTitle = '📋 آخر 20 مستخدم مسجل';
+          break;
+
+        case 'banned_users':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, banned_reason, banned_at, subscription_status, created_at
+            FROM users 
+            WHERE is_banned = true
+            ORDER BY banned_at DESC
+            LIMIT 15
+          `;
+          searchParams = [];
+          resultsTitle = '🚫 قائمة المستخدمين المحظورين';
+          break;
+
+        case 'premium_users':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   subscription_status, subscription_expires_at, created_at, last_activity
+            FROM users 
+            WHERE subscription_status IN ('premium', 'vip')
+            ORDER BY subscription_expires_at DESC NULLS LAST
+            LIMIT 15
+          `;
+          searchParams = [];
+          resultsTitle = '💎 قائمة الأعضاء المميزين';
+          break;
+
+        case 'recent_users':
+          searchQuery = `
+            SELECT id, telegram_id, username, first_name, last_name, role, 
+                   is_banned, subscription_status, created_at, last_activity
+            FROM users 
+            WHERE last_activity > NOW() - INTERVAL '24 hours'
+            ORDER BY last_activity DESC
+            LIMIT 15
+          `;
+          searchParams = [];
+          resultsTitle = '⚠️ المستخدمون النشطون في آخر 24 ساعة';
+          break;
+
+        default:
+          await this.bot.sendMessage(chatId, '❌ نوع البحث غير صحيح.');
+          return;
+      }
+
+      const result = await query(searchQuery, searchParams);
+      const users = result.rows;
+
+      let message = `${resultsTitle}\n\n`;
+      
+      if (users.length === 0) {
+        message += '❌ <b>لا توجد نتائج</b>\n\nلم يتم العثور على أي مستخدمين مطابقين للبحث.';
+      } else {
+        message += `📊 <b>عدد النتائج:</b> ${users.length}\n\n`;
+        
+        users.forEach((user, index) => {
+          const roleEmoji = this.getRoleEmoji(user.role);
+          const statusEmoji = user.is_banned ? '🚫' : '✅';
+          const subscriptionEmoji = this.getSubscriptionEmoji(user.subscription_status);
+          
+          message += `${index + 1}. ${roleEmoji} <b>${user.first_name || 'غير محدد'}</b>\n`;
+          message += `   └ 👤 اسم المستخدم: @${user.username || 'غير محدد'}\n`;
+          message += `   └ 🆔 المعرف الداخلي: ${user.id}\n`;
+          message += `   └ 📞 معرف التلجرام: ${user.telegram_id}\n`;
+          message += `   └ ${statusEmoji} الحالة: ${user.is_banned ? 'محظور' : 'نشط'}\n`;
+          message += `   └ ${subscriptionEmoji} العضوية: ${this.getSubscriptionText(user.subscription_status)}\n`;
+          
+          if (user.banned_reason) {
+            message += `   └ 📝 سبب الحظر: ${user.banned_reason}\n`;
+          }
+          
+          if (user.last_activity) {
+            const lastActivity = new Date(user.last_activity).toLocaleString('ar-SA');
+            message += `   └ ⏰ آخر نشاط: ${lastActivity}\n`;
+          }
+          
+          message += '\n';
+        });
+      }
+
+      const keyboard = [
+        [
+          { text: '🔍 بحث جديد', callback_data: 'security_search_user' },
+          { text: '🔄 تحديث النتائج', callback_data: `search_refresh_${searchType}` }
+        ],
+        [
+          { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+        ]
+      ];
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+
+    } catch (error) {
+      console.error('Error searching users:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في البحث عن المستخدمين. يرجى المحاولة مرة أخرى.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  private getRoleEmoji(role: string): string {
+    const roleEmojis: { [key: string]: string } = {
+      'owner': '👑',
+      'admin': '🛡️',
+      'premium': '💎',
+      'user': '👤'
+    };
+    return roleEmojis[role] || '👤';
+  }
+
+  private getSubscriptionEmoji(subscription: string): string {
+    const subscriptionEmojis: { [key: string]: string } = {
+      'free': '🆓',
+      'premium': '💎',
+      'vip': '👑'
+    };
+    return subscriptionEmojis[subscription] || '🆓';
+  }
+
+  private getSubscriptionText(subscription: string): string {
+    const subscriptionTexts: { [key: string]: string } = {
+      'free': 'مجاني',
+      'premium': 'مميز',
+      'vip': 'في آي بي'
+    };
+    return subscriptionTexts[subscription] || 'مجاني';
   }
 
   private async showSecurityReports(chatId: number): Promise<void> {
