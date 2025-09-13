@@ -8,6 +8,16 @@ import {
   getHelpMessage, 
   formatTrendingSection 
 } from './messageTemplates';
+
+// Helper function for section emojis
+function getSectionEmoji(sectionName: string): string {
+  const section = sectionName.toLowerCase();
+  if (section.includes('movie') || section.includes('أفلام')) return '🎬';
+  if (section.includes('series') || section.includes('مسلسل')) return '📺';
+  if (section.includes('anime') || section.includes('أنمي')) return '🎌';
+  if (section.includes('doc') || section.includes('وثائق')) return '📚';
+  return '🎭';
+}
 import { query } from '../database/client';
 
 // Import Advanced Feature Systems
@@ -99,6 +109,103 @@ export function startCinemaBot() {
     const language = getUserLanguage(msg.from?.language_code);
     
     await handleTrendingCommand(chatId, language);
+  });
+
+  // Handle /movies command
+  bot.onText(/\/movies/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSectionQuery(chatId, 'movies', language);
+  });
+
+  // Handle /series command
+  bot.onText(/\/series/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSectionQuery(chatId, 'series', language);
+  });
+
+  // Handle /anime command
+  bot.onText(/\/anime/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSectionQuery(chatId, 'anime', language);
+  });
+
+  // Handle /docs command
+  bot.onText(/\/docs/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSectionQuery(chatId, 'docs', language);
+  });
+
+  // Handle /latest command
+  bot.onText(/\/latest/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleLatestCommand(chatId, language);
+  });
+
+  // Handle /sections command
+  bot.onText(/\/sections/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSectionsCommand(chatId, language);
+  });
+
+  // Handle /profile command
+  bot.onText(/\/profile/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleProfileCommand(chatId, userId, language);
+  });
+
+  // Handle /language command
+  bot.onText(/\/language/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await showLanguageSelector(chatId, language);
+  });
+
+  // Handle /premium command (user version)
+  bot.onText(/\/premium/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handlePremiumQuery(chatId, language);
+  });
+
+  // Handle /feedback command
+  bot.onText(/\/feedback/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleFeedbackCommand(chatId, language);
+  });
+
+  // Handle /support command
+  bot.onText(/\/support/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleSupportCommand(chatId, language);
+  });
+
+  // Handle /about command
+  bot.onText(/\/about/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const language = getUserLanguage(msg.from?.language_code);
+    
+    await handleAboutCommand(chatId, language);
   });
 
   // Handle /admin command - Main admin dashboard
@@ -687,6 +794,394 @@ To subscribe contact admin: @admin`;
       { parse_mode: 'HTML' }
     );
   }
+}
+
+/**
+ * Handle latest content command
+ */
+async function handleLatestCommand(chatId: number, language: 'ar' | 'en') {
+  try {
+    const latestResults = await query(`
+      SELECT 
+        c.id, c.title, c.title_arabic, c.description, c.description_arabic,
+        c.genre, c.year, c.quality, c.rating, c.duration_minutes,
+        c.is_premium, c.is_trending, c.poster_url,
+        cs.name as section_name, cs.name_arabic as section_name_arabic
+      FROM content c
+      JOIN content_sections cs ON c.section_id = cs.id
+      WHERE c.is_active = true
+      ORDER BY c.created_at DESC
+      LIMIT ${BOT_CONFIG.maxSearchResults}
+    `);
+    
+    if (latestResults.rows.length === 0) {
+      await bot.sendMessage(chatId, language === 'ar' 
+        ? '❌ لا يوجد محتوى جديد متاح حالياً'
+        : '❌ No new content available currently',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    
+    const message = formatContentList(latestResults.rows, 1, 1, language);
+    const keyboard = getSearchResultsKeyboard(latestResults.rows.slice(0, 5), language);
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } catch (error) {
+    console.error('Latest content error:', error);
+    await bot.sendMessage(chatId, language === 'ar' 
+      ? '⚠️ حدث خطأ في عرض المحتوى الجديد'
+      : '⚠️ Error loading latest content',
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Handle sections command - show all available sections
+ */
+async function handleSectionsCommand(chatId: number, language: 'ar' | 'en') {
+  try {
+    const sectionsResult = await query(`
+      SELECT 
+        cs.id, cs.name, cs.name_arabic, cs.description, cs.description_arabic,
+        COUNT(c.id) as content_count
+      FROM content_sections cs
+      LEFT JOIN content c ON cs.id = c.section_id AND c.is_active = true
+      WHERE cs.is_active = true
+      GROUP BY cs.id, cs.name, cs.name_arabic, cs.description, cs.description_arabic
+      ORDER BY cs.display_order ASC, cs.name ASC
+    `);
+    
+    if (sectionsResult.rows.length === 0) {
+      await bot.sendMessage(chatId, language === 'ar' 
+        ? '❌ لا توجد أقسام متاحة حالياً'
+        : '❌ No sections available currently',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+    
+    let message = language === 'ar' 
+      ? '📂 <b>جميع الأقسام المتاحة</b>\n\n'
+      : '📂 <b>All Available Sections</b>\n\n';
+    
+    const keyboard = [];
+    
+    sectionsResult.rows.forEach((section, index) => {
+      const sectionName = language === 'ar' ? (section.name_arabic || section.name) : section.name;
+      const emoji = getSectionEmoji(section.name);
+      
+      message += `${emoji} <b>${sectionName}</b>\n`;
+      message += language === 'ar' 
+        ? `📊 ${section.content_count} عنصر\n\n`
+        : `📊 ${section.content_count} items\n\n`;
+      
+      // Add section to keyboard
+      const callbackData = section.name.toLowerCase().includes('movie') ? 'movies' :
+                           section.name.toLowerCase().includes('series') ? 'series' :
+                           section.name.toLowerCase().includes('anime') ? 'anime' :
+                           section.name.toLowerCase().includes('doc') ? 'docs' : 
+                           `section_${section.id}`;
+      
+      keyboard.push([{ text: `${emoji} ${sectionName}`, callback_data: callbackData }]);
+    });
+    
+    keyboard.push([{
+      text: language === 'ar' ? '🔙 القائمة الرئيسية' : '🔙 Main Menu',
+      callback_data: 'back_main'
+    }]);
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } catch (error) {
+    console.error('Sections command error:', error);
+    await bot.sendMessage(chatId, language === 'ar' 
+      ? '⚠️ حدث خطأ في عرض الأقسام'
+      : '⚠️ Error loading sections',
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Handle profile command - show user profile and stats
+ */
+async function handleProfileCommand(chatId: number, userId: number, language: 'ar' | 'en') {
+  try {
+    const userResult = await query(`
+      SELECT 
+        u.*, 
+        COUNT(DISTINCT uv.content_id) as viewed_count,
+        COUNT(DISTINCT ur.content_id) as rated_count
+      FROM users u
+      LEFT JOIN user_views uv ON u.telegram_id = uv.user_id
+      LEFT JOIN user_ratings ur ON u.telegram_id = ur.user_id
+      WHERE u.telegram_id = $1
+      GROUP BY u.id, u.telegram_id, u.username, u.first_name, u.last_name, u.role, u.language, u.created_at, u.last_activity
+    `, [userId]);
+    
+    if (userResult.rows.length === 0) {
+      // User doesn't exist, create them first
+      await ensureUserExists(userId, { id: userId });
+      await handleProfileCommand(chatId, userId, language);
+      return;
+    }
+    
+    const user = userResult.rows[0];
+    const joinDate = new Date(user.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US');
+    const lastActivity = new Date(user.last_activity).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US');
+    
+    const message = language === 'ar' 
+      ? `👤 <b>الملف الشخصي</b>
+
+🆔 <b>المعرف:</b> ${user.telegram_id}
+👋 <b>الاسم:</b> ${user.first_name || 'غير محدد'}
+📛 <b>اسم المستخدم:</b> ${user.username ? '@' + user.username : 'غير محدد'}
+🏷️ <b>الدور:</b> ${user.role === 'admin' ? 'مدير' : user.role === 'premium' ? 'مميز' : 'عادي'}
+🌍 <b>اللغة:</b> ${user.language === 'ar' ? 'العربية' : 'الإنجليزية'}
+
+📊 <b>الإحصائيات:</b>
+👀 <b>المحتوى المشاهد:</b> ${user.viewed_count || 0}
+⭐ <b>التقييمات:</b> ${user.rated_count || 0}
+
+📅 <b>تاريخ الانضمام:</b> ${joinDate}
+🕒 <b>آخر نشاط:</b> ${lastActivity}`
+      : `👤 <b>User Profile</b>
+
+🆔 <b>ID:</b> ${user.telegram_id}
+👋 <b>Name:</b> ${user.first_name || 'Not set'}
+📛 <b>Username:</b> ${user.username ? '@' + user.username : 'Not set'}
+🏷️ <b>Role:</b> ${user.role === 'admin' ? 'Admin' : user.role === 'premium' ? 'Premium' : 'Regular'}
+🌍 <b>Language:</b> ${user.language === 'ar' ? 'Arabic' : 'English'}
+
+📊 <b>Statistics:</b>
+👀 <b>Content Viewed:</b> ${user.viewed_count || 0}
+⭐ <b>Ratings Given:</b> ${user.rated_count || 0}
+
+📅 <b>Joined:</b> ${joinDate}
+🕒 <b>Last Activity:</b> ${lastActivity}`;
+    
+    const keyboard = [
+      [
+        { text: language === 'ar' ? '🌍 تغيير اللغة' : '🌍 Change Language', callback_data: 'language' }
+      ],
+      [
+        { text: language === 'ar' ? '🔙 القائمة الرئيسية' : '🔙 Main Menu', callback_data: 'back_main' }
+      ]
+    ];
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  } catch (error) {
+    console.error('Profile command error:', error);
+    await bot.sendMessage(chatId, language === 'ar' 
+      ? '⚠️ حدث خطأ في عرض الملف الشخصي'
+      : '⚠️ Error loading profile',
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Handle feedback command
+ */
+async function handleFeedbackCommand(chatId: number, language: 'ar' | 'en') {
+  const message = language === 'ar' 
+    ? `💬 <b>إرسال ملاحظات</b>
+
+نحن نقدر ملاحظاتكم وآرائكم! 
+
+📝 <b>كيفية إرسال الملاحظات:</b>
+• راسل المدراء مباشرة: @admin
+• اكتب رسالة مفصلة عن اقتراحك أو مشكلتك
+• سنرد عليك في أقرب وقت ممكن
+
+💡 <b>نوع الملاحظات المرحب بها:</b>
+• اقتراحات لتحسين البوت
+• طلبات محتوى جديد
+• الإبلاغ عن مشاكل تقنية
+• تقييم تجربة الاستخدام
+
+شكراً لمساعدتنا في التطوير! 🙏`
+    : `💬 <b>Send Feedback</b>
+
+We appreciate your feedback and suggestions!
+
+📝 <b>How to send feedback:</b>
+• Message admins directly: @admin
+• Write a detailed message about your suggestion or issue
+• We'll respond as soon as possible
+
+💡 <b>Types of feedback welcome:</b>
+• Suggestions for bot improvements
+• New content requests
+• Technical issue reports
+• User experience feedback
+
+Thank you for helping us improve! 🙏`;
+  
+  const keyboard = [
+    [
+      { text: language === 'ar' ? '📩 راسل الإدارة' : '📩 Contact Admin', url: 'https://t.me/admin' }
+    ],
+    [
+      { text: language === 'ar' ? '🔙 القائمة الرئيسية' : '🔙 Main Menu', callback_data: 'back_main' }
+    ]
+  ];
+  
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+/**
+ * Handle support command
+ */
+async function handleSupportCommand(chatId: number, language: 'ar' | 'en') {
+  const message = language === 'ar' 
+    ? `🛠️ <b>الدعم الفني</b>
+
+تحتاج مساعدة؟ نحن هنا لمساعدتك!
+
+📞 <b>طرق التواصل:</b>
+• راسل فريق الدعم: @support
+• راسل المدراء: @admin
+
+⚡ <b>مشاكل شائعة:</b>
+• مشكلة في التحميل؟ تأكد من اتصال الإنترنت
+• لا تظهر النتائج؟ جرب كلمات بحث مختلفة
+• مشكلة في الاشتراك المميز؟ راسل الإدارة
+
+❓ <b>أسئلة شائعة:</b>
+• كيف أشترك في الخدمة المميزة؟
+• كيف أحمل المحتوى؟
+• كيف أغير اللغة؟
+
+💡 استخدم /help للحصول على قائمة الأوامر`
+    : `🛠️ <b>Technical Support</b>
+
+Need help? We're here to assist you!
+
+📞 <b>Contact Methods:</b>
+• Message support team: @support
+• Message admins: @admin
+
+⚡ <b>Common Issues:</b>
+• Download problems? Check internet connection
+• No results showing? Try different search terms
+• Premium subscription issues? Contact admin
+
+❓ <b>FAQ:</b>
+• How to subscribe to premium?
+• How to download content?
+• How to change language?
+
+💡 Use /help to see all available commands`;
+  
+  const keyboard = [
+    [
+      { text: language === 'ar' ? '🆘 فريق الدعم' : '🆘 Support Team', url: 'https://t.me/support' },
+      { text: language === 'ar' ? '👨‍💼 الإدارة' : '👨‍💼 Admin', url: 'https://t.me/admin' }
+    ],
+    [
+      { text: language === 'ar' ? '📖 المساعدة' : '📖 Help', callback_data: '/help' }
+    ],
+    [
+      { text: language === 'ar' ? '🔙 القائمة الرئيسية' : '🔙 Main Menu', callback_data: 'back_main' }
+    ]
+  ];
+  
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+/**
+ * Handle about command
+ */
+async function handleAboutCommand(chatId: number, language: 'ar' | 'en') {
+  const message = language === 'ar' 
+    ? `ℹ️ <b>معلومات عن البوت</b>
+
+🎬 <b>بوت السينما العربية</b>
+نسخة 2.0.0
+
+📱 <b>وصف البوت:</b>
+بوت متخصص في توفير المحتوى السينمائي العربي والعالمي بجودة عالية مع ترجمة احترافية.
+
+✨ <b>المميزات الرئيسية:</b>
+• 🎬 مكتبة ضخمة من الأفلام
+• 📺 مسلسلات متنوعة  
+• 🎌 أنمي مترجم
+• 📚 وثائقيات تعليمية
+• 🔍 بحث ذكي وسريع
+• 🏆 اشتراك مميز
+
+🛠️ <b>التقنيات المستخدمة:</b>
+• Node.js + TypeScript
+• PostgreSQL Database
+• Telegram Bot API
+• AI-Powered Search
+
+👥 <b>فريق التطوير:</b>
+• المطورون: فريق عمل متخصص
+• الدعم الفني: متاح 24/7
+
+📅 <b>تاريخ الإنشاء:</b> سبتمبر 2025
+🔄 <b>آخر تحديث:</b> ${new Date().toLocaleDateString('ar-SA')}`
+    : `ℹ️ <b>About Bot</b>
+
+🎬 <b>Arabic Cinema Bot</b>
+Version 2.0.0
+
+📱 <b>Bot Description:</b>
+Specialized bot for providing Arabic and international cinematic content in high quality with professional subtitles.
+
+✨ <b>Key Features:</b>
+• 🎬 Huge movie library
+• 📺 Diverse TV series
+• 🎌 Subtitled anime
+• 📚 Educational documentaries
+• 🔍 Smart and fast search
+• 🏆 Premium subscription
+
+🛠️ <b>Technologies Used:</b>
+• Node.js + TypeScript
+• PostgreSQL Database
+• Telegram Bot API
+• AI-Powered Search
+
+👥 <b>Development Team:</b>
+• Developers: Specialized team
+• Technical Support: Available 24/7
+
+📅 <b>Created:</b> September 2025
+🔄 <b>Last Update:</b> ${new Date().toLocaleDateString('en-US')}`;
+  
+  const keyboard = [
+    [
+      { text: language === 'ar' ? '🔄 آخر التحديثات' : '🔄 Latest Updates', callback_data: 'latest' },
+      { text: language === 'ar' ? '💬 التواصل' : '💬 Contact', callback_data: 'feedback' }
+    ],
+    [
+      { text: language === 'ar' ? '🔙 القائمة الرئيسية' : '🔙 Main Menu', callback_data: 'back_main' }
+    ]
+  ];
+  
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: keyboard }
+  });
 }
 
 /**
