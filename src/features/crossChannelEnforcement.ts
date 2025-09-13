@@ -135,13 +135,15 @@ export class CrossChannelEnforcement {
         default:
           if (data.startsWith('security_ban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
-            await this.confirmBanUser(chatId, targetUserId, userId);
+            // Ban functionality handled through other interfaces
+            await this.startUserBanProcess(chatId, userId);
           } else if (data.startsWith('security_unban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
-            await this.confirmUnbanUser(chatId, targetUserId, userId);
+            const telegramUserId = parseInt(data.split('_')[3] || '0');
+            await this.confirmUnbanUser(chatId, targetUserId, telegramUserId, userId);
           } else if (data.startsWith('security_warn_')) {
             const targetUserId = parseInt(data.split('_')[2]);
-            await this.issueWarning(chatId, targetUserId, userId);
+            await this.showActiveWarnings(chatId);
           }
           break;
       }
@@ -778,14 +780,399 @@ export class CrossChannelEnforcement {
   }
 
   private async showUnbanInterface(chatId: number): Promise<void> {
-    await this.showBannedUsersList(chatId);
+    try {
+      // Get list of banned users with more detailed info for unban interface
+      const bannedUsers = await query(`
+        SELECT id, telegram_id, username, first_name, last_name, 
+               banned_reason, banned_at, banned_by,
+               (SELECT first_name FROM users u2 WHERE u2.id = users.banned_by) as banned_by_name
+        FROM users 
+        WHERE is_banned = true 
+        ORDER BY banned_at DESC 
+        LIMIT 15
+      `);
+
+      let message = '✅ <b>واجهة إلغاء الحظر</b>\n\n';
+
+      if (bannedUsers.rows.length === 0) {
+        message += '🎉 <b>لا يوجد مستخدمون محظورون</b>\n\nجميع المستخدمين نشطون حالياً.';
+        
+        const keyboard = [
+          [
+            { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+          ]
+        ];
+
+        await this.bot.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboard }
+        });
+        return;
+      }
+
+      message += `📊 <b>عدد المحظورين:</b> ${bannedUsers.rows.length}\n\n`;
+      
+      let keyboard: any[] = [];
+
+      bannedUsers.rows.forEach((user, index) => {
+        const banDate = new Date(user.banned_at).toLocaleDateString('ar-SA');
+        const bannedByText = user.banned_by_name ? `بواسطة: ${user.banned_by_name}` : 'مجهول';
+        
+        message += `${index + 1}. 👤 <b>${user.first_name} ${user.last_name || ''}</b>\n`;
+        message += `   └ 🆔 المعرف: ${user.id} | 📞 التلجرام: ${user.telegram_id}\n`;
+        message += `   └ 📅 محظور في: ${banDate}\n`;
+        message += `   └ 👮 ${bannedByText}\n`;
+        message += `   └ 📝 السبب: ${user.banned_reason || 'غير محدد'}\n\n`;
+
+        // Add unban button for each user
+        keyboard.push([
+          { 
+            text: `✅ إلغاء حظر ${user.first_name}`, 
+            callback_data: `unban_confirm_${user.id}_${user.telegram_id}` 
+          }
+        ]);
+      });
+
+      // Add navigation buttons
+      keyboard.push([
+        { text: '🔄 تحديث القائمة', callback_data: 'security_unban_user' },
+        { text: '📋 عرض المزيد', callback_data: 'show_more_banned' }
+      ]);
+      
+      keyboard.push([
+        { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+      ]);
+
+      message += '<i>اضغط على زر إلغاء الحظر بجانب اسم المستخدم المطلوب</i>';
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing unban interface:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عرض واجهة إلغاء الحظر.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Confirm unban user process
+   */
+  async confirmUnbanUser(chatId: number, userId: number, telegramUserId: number, unbannedBy: number): Promise<void> {
+    try {
+      // Get user info
+      const userResult = await query(`
+        SELECT id, first_name, last_name, username, banned_reason, banned_at,
+               (SELECT first_name FROM users u2 WHERE u2.id = users.banned_by) as banned_by_name
+        FROM users 
+        WHERE id = $1 AND is_banned = true
+      `, [userId]);
+
+      if (userResult.rows.length === 0) {
+        await this.bot.sendMessage(chatId, 
+          '❌ <b>المستخدم غير موجود أو غير محظور</b>',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      const user = userResult.rows[0];
+      const banDate = new Date(user.banned_at).toLocaleDateString('ar-SA');
+
+      const keyboard = [
+        [
+          { text: '✅ تأكيد إلغاء الحظر', callback_data: `execute_unban_${userId}_${telegramUserId}_${unbannedBy}` },
+          { text: '❌ إلغاء العملية', callback_data: 'security_unban_user' }
+        ]
+      ];
+
+      const message = `✅ <b>تأكيد إلغاء حظر المستخدم</b>\n\n` +
+                     `👤 <b>معلومات المستخدم:</b>\n` +
+                     `• الاسم: ${user.first_name} ${user.last_name || ''}\n` +
+                     `• اسم المستخدم: @${user.username || 'غير محدد'}\n` +
+                     `• المعرف: ${user.id}\n` +
+                     `• معرف التلجرام: ${telegramUserId}\n\n` +
+                     `📋 <b>معلومات الحظر:</b>\n` +
+                     `• تاريخ الحظر: ${banDate}\n` +
+                     `• محظور بواسطة: ${user.banned_by_name || 'مجهول'}\n` +
+                     `• سبب الحظر: ${user.banned_reason || 'غير محدد'}\n\n` +
+                     `⚠️ <b>إلغاء الحظر سيؤدي إلى:</b>\n` +
+                     `• السماح للمستخدم بالوصول لجميع القنوات\n` +
+                     `• إرسال إشعار للمستخدم بإلغاء الحظر\n` +
+                     `• تسجيل الإجراء في سجل الأمان\n\n` +
+                     `<b>هل أنت متأكد من إلغاء الحظر؟</b>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error confirming unban user:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في تأكيد إلغاء الحظر.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Execute the unban process
+   */
+  async executeUnbanUser(chatId: number, userId: number, telegramUserId: number, unbannedBy: number): Promise<void> {
+    try {
+      const success = await this.unbanUserFromChannels(telegramUserId, unbannedBy);
+      
+      if (success) {
+        // Get user name for confirmation message
+        const userResult = await query('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
+        const userName = userResult.rows[0] ? 
+          `${userResult.rows[0].first_name} ${userResult.rows[0].last_name || ''}`.trim() : 'المستخدم';
+
+        await this.bot.sendMessage(chatId, 
+          `✅ <b>تم إلغاء الحظر بنجاح</b>\n\n` +
+          `👤 المستخدم: ${userName}\n` +
+          `🆔 المعرف: ${userId}\n` +
+          `📅 تاريخ إلغاء الحظر: ${new Date().toLocaleString('ar-SA')}\n\n` +
+          `تم إرسال إشعار للمستخدم وتسجيل الإجراء في السجل.`,
+          { parse_mode: 'HTML' }
+        );
+
+        // Show updated unban interface
+        setTimeout(() => {
+          this.showUnbanInterface(chatId);
+        }, 2000);
+      } else {
+        await this.bot.sendMessage(chatId, 
+          '❌ <b>فشل في إلغاء الحظر</b>\n\nحدث خطأ أثناء معالجة طلب إلغاء الحظر.',
+          { parse_mode: 'HTML' }
+        );
+      }
+    } catch (error) {
+      console.error('Error executing unban user:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في تنفيذ إلغاء الحظر.',
+        { parse_mode: 'HTML' }
+      );
+    }
   }
 
   private async showActiveWarnings(chatId: number): Promise<void> {
-    await this.bot.sendMessage(chatId, 
-      '⚠️ <b>التحذيرات النشطة</b>\n\nقريباً - عرض التحذيرات النشطة.',
-      { parse_mode: 'HTML' }
-    );
+    try {
+      // Get active warnings from user_behavior_logs
+      const activeWarnings = await query(`
+        SELECT 
+          ubl.id, ubl.user_id, ubl.action_type, ubl.flagged_content, 
+          ubl.severity, ubl.created_at, ubl.is_reviewed,
+          u.first_name, u.last_name, u.username, u.telegram_id,
+          (SELECT first_name FROM users u2 WHERE u2.id = ubl.reviewed_by) as reviewed_by_name
+        FROM user_behavior_logs ubl
+        JOIN users u ON ubl.user_id = u.id
+        WHERE ubl.severity IN ('medium', 'high', 'critical') 
+        AND ubl.is_reviewed = false
+        ORDER BY 
+          CASE ubl.severity 
+            WHEN 'critical' THEN 1 
+            WHEN 'high' THEN 2 
+            WHEN 'medium' THEN 3 
+            ELSE 4 
+          END,
+          ubl.created_at DESC
+        LIMIT 20
+      `);
+
+      let message = '⚠️ <b>التحذيرات النشطة (غير المراجعة)</b>\n\n';
+
+      if (activeWarnings.rows.length === 0) {
+        message += '✅ <b>لا توجد تحذيرات نشطة</b>\n\nجميع التحذيرات تمت مراجعتها أو لا توجد مشاكل حالياً.';
+        
+        const keyboard = [
+          [
+            { text: '📋 عرض جميع التحذيرات', callback_data: 'show_all_warnings' },
+            { text: '🔄 تحديث', callback_data: 'security_active_warnings' }
+          ],
+          [
+            { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+          ]
+        ];
+
+        await this.bot.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboard }
+        });
+        return;
+      }
+
+      const severityStats = {
+        critical: activeWarnings.rows.filter(w => w.severity === 'critical').length,
+        high: activeWarnings.rows.filter(w => w.severity === 'high').length,
+        medium: activeWarnings.rows.filter(w => w.severity === 'medium').length
+      };
+
+      message += `📊 <b>إحصائيات التحذيرات:</b>\n`;
+      message += `🔴 حرجة: ${severityStats.critical} | `;
+      message += `🟠 عالية: ${severityStats.high} | `;
+      message += `🟡 متوسطة: ${severityStats.medium}\n\n`;
+
+      let keyboard: any[] = [];
+
+      activeWarnings.rows.forEach((warning, index) => {
+        const severityEmoji = this.getSeverityEmoji(warning.severity);
+        const warningDate = new Date(warning.created_at).toLocaleString('ar-SA', {
+          timeZone: 'Asia/Riyadh'
+        });
+        
+        message += `${index + 1}. ${severityEmoji} <b>${warning.action_type}</b>\n`;
+        message += `   └ 👤 المستخدم: ${warning.first_name} ${warning.last_name || ''}\n`;
+        message += `   └ 🆔 المعرف: ${warning.user_id} | 📞 ${warning.telegram_id}\n`;
+        message += `   └ 📅 التاريخ: ${warningDate}\n`;
+        message += `   └ 🗂️ التفاصيل: ${warning.flagged_content || 'غير محدد'}\n`;
+        message += `   └ ⚡ الأولوية: ${this.getSeverityText(warning.severity)}\n\n`;
+
+        // Add action buttons for each warning
+        keyboard.push([
+          { 
+            text: `✅ مراجع - ${warning.first_name}`, 
+            callback_data: `review_warning_${warning.id}_approved` 
+          },
+          { 
+            text: `🚫 حظر - ${warning.first_name}`, 
+            callback_data: `review_warning_${warning.id}_ban` 
+          }
+        ]);
+      });
+
+      // Add general control buttons
+      keyboard.push([
+        { text: '✅ مراجعة جميع التحذيرات', callback_data: 'review_all_warnings' },
+        { text: '📋 عرض المزيد', callback_data: 'show_more_warnings' }
+      ]);
+
+      keyboard.push([
+        { text: '🔄 تحديث القائمة', callback_data: 'security_active_warnings' },
+        { text: '🔙 رجوع للأمان', callback_data: 'security_management' }
+      ]);
+
+      message += '<i>اضغط على الأزرار لمراجعة التحذيرات أو اتخاذ إجراء</i>';
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing active warnings:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عرض التحذيرات النشطة.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Process warning review
+   */
+  async reviewWarning(chatId: number, warningId: number, action: 'approved' | 'ban', reviewedBy: number): Promise<void> {
+    try {
+      // Get warning details
+      const warningResult = await query(`
+        SELECT ubl.*, u.first_name, u.last_name, u.telegram_id
+        FROM user_behavior_logs ubl
+        JOIN users u ON ubl.user_id = u.id
+        WHERE ubl.id = $1
+      `, [warningId]);
+
+      if (warningResult.rows.length === 0) {
+        await this.bot.sendMessage(chatId, '❌ التحذير غير موجود.', { parse_mode: 'HTML' });
+        return;
+      }
+
+      const warning = warningResult.rows[0];
+
+      // Update warning as reviewed
+      await query(`
+        UPDATE user_behavior_logs 
+        SET is_reviewed = true, reviewed_by = $1, reviewed_at = NOW()
+        WHERE id = $2
+      `, [reviewedBy, warningId]);
+
+      let message = '';
+
+      if (action === 'approved') {
+        message = `✅ <b>تم مراجعة التحذير</b>\n\n` +
+                 `👤 المستخدم: ${warning.first_name} ${warning.last_name || ''}\n` +
+                 `📋 نوع التحذير: ${warning.action_type}\n` +
+                 `📅 تاريخ المراجعة: ${new Date().toLocaleString('ar-SA')}\n\n` +
+                 `تم وضع علامة على التحذير كمراجع دون اتخاذ إجراء إضافي.`;
+
+        // Log admin action
+        await this.logAdminAction(reviewedBy, 'review_warning', 'warning', warningId, {
+          warning_type: warning.action_type,
+          user_id: warning.user_id,
+          action_taken: 'approved',
+          severity: warning.severity
+        });
+      } else if (action === 'ban') {
+        // Proceed with ban based on warning severity
+        const banReason = `تحذير أمني: ${warning.action_type}${warning.flagged_content ? ' - ' + warning.flagged_content : ''}`;
+        const banType = warning.severity === 'critical' ? 'permanent' : 'temporary';
+        const banDuration = warning.severity === 'critical' ? undefined : (warning.severity === 'high' ? 168 : 24); // critical=permanent, high=7days, medium=1day
+
+        const banSuccess = await this.banUserAcrossChannels(
+          warning.telegram_id,
+          banReason,
+          banType,
+          banDuration,
+          reviewedBy
+        );
+
+        if (banSuccess) {
+          message = `🚫 <b>تم حظر المستخدم بناءً على التحذير</b>\n\n` +
+                   `👤 المستخدم: ${warning.first_name} ${warning.last_name || ''}\n` +
+                   `📋 السبب: ${banReason}\n` +
+                   `⏰ نوع الحظر: ${banType === 'permanent' ? 'دائم' : `مؤقت (${banDuration} ساعة)`}\n` +
+                   `📅 تاريخ الحظر: ${new Date().toLocaleString('ar-SA')}\n\n` +
+                   `تم تطبيق الحظر وإرسال إشعار للمستخدم.`;
+        } else {
+          message = `❌ <b>فشل في حظر المستخدم</b>\n\nحدث خطأ أثناء تطبيق الحظر.`;
+        }
+      }
+
+      await this.bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+
+      // Show updated warnings list after 2 seconds
+      setTimeout(() => {
+        this.showActiveWarnings(chatId);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error reviewing warning:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في مراجعة التحذير.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  private getSeverityEmoji(severity: string): string {
+    const severityEmojis: { [key: string]: string } = {
+      'low': '🟢',
+      'medium': '🟡',
+      'high': '🟠',
+      'critical': '🔴'
+    };
+    return severityEmojis[severity] || '⚪';
+  }
+
+  private getSeverityText(severity: string): string {
+    const severityTexts: { [key: string]: string } = {
+      'low': 'منخفضة',
+      'medium': 'متوسطة',
+      'high': 'عالية',
+      'critical': 'حرجة'
+    };
+    return severityTexts[severity] || 'غير محدد';
   }
 
   private async startUserSearch(chatId: number): Promise<void> {
@@ -1046,15 +1433,4 @@ export class CrossChannelEnforcement {
     );
   }
 
-  private async confirmBanUser(chatId: number, targetUserId: number, bannedBy: number): Promise<void> {
-    // Implementation for confirming ban
-  }
-
-  private async confirmUnbanUser(chatId: number, targetUserId: number, unbannedBy: number): Promise<void> {
-    // Implementation for confirming unban
-  }
-
-  private async issueWarning(chatId: number, targetUserId: number, issuedBy: number): Promise<void> {
-    // Implementation for issuing warnings
-  }
 }

@@ -236,3 +236,93 @@ ON CONFLICT (setting_key) DO NOTHING;
 INSERT INTO trending_config (display_message_arabic, max_items) VALUES 
 ('🔥 المحتوى الأكثر شعبية', 5)
 ON CONFLICT DO NOTHING;
+
+-- Cross-channel bans for tracking user bans across all channels
+CREATE TABLE IF NOT EXISTS cross_channel_bans (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    telegram_user_id BIGINT NOT NULL,
+    ban_reason TEXT NOT NULL,
+    ban_type VARCHAR(50) CHECK (ban_type IN ('temporary', 'permanent', 'warning')),
+    expires_at TIMESTAMP,
+    banned_from_channels TEXT[] DEFAULT '{}', -- Array of channel IDs
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Security events logging
+CREATE TABLE IF NOT EXISTS security_events (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    event_type VARCHAR(100) NOT NULL,
+    severity VARCHAR(50) CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    details JSONB DEFAULT '{}',
+    ip_address INET,
+    automatic_action VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Premium channels configuration
+CREATE TABLE IF NOT EXISTS premium_channels (
+    id SERIAL PRIMARY KEY,
+    channel_id VARCHAR(255) UNIQUE NOT NULL,
+    channel_name VARCHAR(255),
+    channel_type VARCHAR(50) DEFAULT 'premium',
+    subscription_required BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Revenue tracking for admin analytics
+CREATE TABLE IF NOT EXISTS revenue_tracking (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    revenue_amount DECIMAL(10,2) NOT NULL,
+    revenue_source VARCHAR(100), -- 'subscription', 'one_time', 'premium_access'
+    transaction_id VARCHAR(255),
+    payment_method VARCHAR(100),
+    currency VARCHAR(10) DEFAULT 'USD',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Payment submissions for admin review
+CREATE TABLE IF NOT EXISTS payment_submissions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'USD',
+    payment_proof_url TEXT,
+    payment_reference VARCHAR(255),
+    subscription_type VARCHAR(50) DEFAULT 'premium',
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    admin_notes TEXT,
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Custom commands management
+CREATE TABLE IF NOT EXISTS custom_commands (
+    id SERIAL PRIMARY KEY,
+    command_name VARCHAR(100) NOT NULL UNIQUE,
+    command_description TEXT,
+    response_text TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for new tables
+CREATE INDEX IF NOT EXISTS idx_cross_channel_bans_telegram_user_id ON cross_channel_bans(telegram_user_id);
+CREATE INDEX IF NOT EXISTS idx_cross_channel_bans_is_active ON cross_channel_bans(is_active);
+CREATE INDEX IF NOT EXISTS idx_security_events_user_id ON security_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events(severity);
+CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_premium_channels_is_active ON premium_channels(is_active);
+CREATE INDEX IF NOT EXISTS idx_revenue_tracking_user_id ON revenue_tracking(user_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_tracking_created_at ON revenue_tracking(created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_submissions_status ON payment_submissions(status);
