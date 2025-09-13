@@ -277,27 +277,46 @@ export class AdminDashboard {
           (SELECT COUNT(*) FROM security_events WHERE severity IN ('high', 'critical') AND created_at > NOW() - INTERVAL '7 days') as suspicious_activities
       `);
 
+      // Map snake_case database results to camelCase object properties
+      const userRow = userStats.rows[0];
+      const contentRow = contentStats.rows[0];
+      const revenueRow = revenueStats.rows[0];
+      const systemRow = systemStats.rows[0];
+      const securityRow = securityStats.rows[0];
+
       return {
-        userStats: userStats.rows[0] || { totalUsers: 0, activeUsers: 0, premiumUsers: 0, bannedUsers: 0, newUsersToday: 0 },
-        contentStats: contentStats.rows[0] || { totalContent: 0, activeContent: 0, trendingContent: 0, newContentToday: 0, totalViews: 0 },
+        userStats: {
+          totalUsers: parseInt(userRow?.total_users) || 0,
+          activeUsers: parseInt(userRow?.active_users) || 0,
+          premiumUsers: parseInt(userRow?.premium_users) || 0,
+          bannedUsers: parseInt(userRow?.banned_users) || 0,
+          newUsersToday: parseInt(userRow?.new_users_today) || 0
+        },
+        contentStats: {
+          totalContent: parseInt(contentRow?.total_content) || 0,
+          activeContent: parseInt(contentRow?.active_content) || 0,
+          trendingContent: parseInt(contentRow?.trending_content) || 0,
+          newContentToday: parseInt(contentRow?.new_content_today) || 0,
+          totalViews: parseInt(contentRow?.total_views) || 0
+        },
         revenueStats: {
-          totalRevenue: revenueStats.rows[0]?.total_revenue || 0,
-          monthlyRevenue: revenueStats.rows[0]?.monthly_revenue || 0,
-          pendingPayments: pendingPayments.rows[0]?.pending_count || 0,
-          activeSubscriptions: activeSubscriptions.rows[0]?.active_subs || 0,
-          averageSubscriptionValue: revenueStats.rows[0]?.avg_transaction || 0
+          totalRevenue: parseFloat(revenueRow?.total_revenue) || 0,
+          monthlyRevenue: parseFloat(revenueRow?.monthly_revenue) || 0,
+          pendingPayments: parseInt(pendingPayments.rows[0]?.pending_count) || 0,
+          activeSubscriptions: parseInt(activeSubscriptions.rows[0]?.active_subs) || 0,
+          averageSubscriptionValue: parseFloat(revenueRow?.avg_transaction) || 0
         },
         systemStats: {
-          totalChannels: systemStats.rows[0]?.total_channels || 0,
-          activeChannels: systemStats.rows[0]?.active_channels || 0,
+          totalChannels: parseInt(systemRow?.total_channels) || 0,
+          activeChannels: parseInt(systemRow?.active_channels) || 0,
           totalBots: 1, // This bot
           systemUptime: this.calculateUptime(),
-          totalCommands: systemStats.rows[0]?.total_commands || 0
+          totalCommands: parseInt(systemRow?.total_commands) || 0
         },
         securityStats: {
-          activeBans: securityStats.rows[0]?.active_bans || 0,
-          securityEvents: securityStats.rows[0]?.recent_security_events || 0,
-          suspiciousActivities: securityStats.rows[0]?.suspicious_activities || 0,
+          activeBans: parseInt(securityRow?.active_bans) || 0,
+          securityEvents: parseInt(securityRow?.recent_security_events) || 0,
+          suspiciousActivities: parseInt(securityRow?.suspicious_activities) || 0,
           blockedIPs: 0 // Placeholder
         }
       };
@@ -669,6 +688,133 @@ export class AdminDashboard {
     }
   }
 
+  /**
+   * Get user role by internal user ID
+   */
+  private async getUserRole(userId: number): Promise<string> {
+    try {
+      const result = await query('SELECT role FROM users WHERE id = $1', [userId]);
+      return result.rows.length > 0 ? result.rows[0].role : 'user';
+    } catch (error) {
+      console.error('Error getting user role:', error);
+      return 'user';
+    }
+  }
+
+  /**
+   * Get internal user ID from Telegram ID
+   */
+  private async getInternalUserId(telegramId: number): Promise<number | null> {
+    try {
+      const result = await query('SELECT id FROM users WHERE telegram_id = $1', [telegramId]);
+      return result.rows.length > 0 ? result.rows[0].id : null;
+    } catch (error) {
+      console.error('Error getting internal user ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate system uptime
+   */
+  private calculateUptime(): string {
+    const uptimeMs = process.uptime() * 1000;
+    const hours = Math.floor(uptimeMs / (1000 * 60 * 60));
+    const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}س ${minutes}د`;
+  }
+
+  /**
+   * Get empty stats for fallback
+   */
+  private getEmptyStats(): DashboardStats {
+    return {
+      userStats: {
+        totalUsers: 0,
+        activeUsers: 0,
+        premiumUsers: 0,
+        bannedUsers: 0,
+        newUsersToday: 0
+      },
+      contentStats: {
+        totalContent: 0,
+        activeContent: 0,
+        trendingContent: 0,
+        newContentToday: 0,
+        totalViews: 0
+      },
+      revenueStats: {
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        pendingPayments: 0,
+        activeSubscriptions: 0,
+        averageSubscriptionValue: 0
+      },
+      systemStats: {
+        totalChannels: 0,
+        activeChannels: 0,
+        totalBots: 1,
+        systemUptime: '0س 0د',
+        totalCommands: 0
+      },
+      securityStats: {
+        activeBans: 0,
+        securityEvents: 0,
+        suspiciousActivities: 0,
+        blockedIPs: 0
+      }
+    };
+  }
+
+  /**
+   * Calculate security health score
+   */
+  private calculateSecurityHealth(stats: any): number {
+    try {
+      let score = 100;
+      
+      // Deduct points for security issues
+      if (stats.suspiciousActivities24h > 10) score -= 20;
+      else if (stats.suspiciousActivities24h > 5) score -= 10;
+      
+      if (stats.activeWarnings > 50) score -= 15;
+      else if (stats.activeWarnings > 20) score -= 10;
+      else if (stats.activeWarnings > 10) score -= 5;
+      
+      if (stats.totalBanned > 100) score -= 10;
+      else if (stats.totalBanned > 50) score -= 5;
+      
+      return Math.max(0, score);
+    } catch (error) {
+      console.error('Error calculating security health:', error);
+      return 50; // Neutral score on error
+    }
+  }
+
+  /**
+   * Get health indicator emoji
+   */
+  private getHealthIndicator(score: number): string {
+    if (score >= 90) return '🟢'; // Excellent
+    if (score >= 80) return '🟡'; // Good
+    if (score >= 70) return '🟠'; // Fair
+    if (score >= 60) return '🔴'; // Poor
+    return '🚨'; // Critical
+  }
+
+  /**
+   * Get security event emoji
+   */
+  private getSecurityEventEmoji(eventType: string): string {
+    switch (eventType) {
+      case 'ban_user': return '🚫';
+      case 'unban_user': return '✅';
+      case 'security_warning': return '⚠️';
+      case 'suspicious_activity': return '🕵️';
+      default: return '🔒';
+    }
+  }
+
   private getPaymentStatusEmoji(status: string): string {
     switch (status) {
       case 'approved': return '✅';
@@ -716,40 +862,6 @@ export class AdminDashboard {
     }
   }
 
-  private calculateUptime(): string {
-    // This would calculate actual uptime
-    return '99.9%';
-  }
-
-  private getEmptyStats(): DashboardStats {
-    return {
-      userStats: { totalUsers: 0, activeUsers: 0, premiumUsers: 0, bannedUsers: 0, newUsersToday: 0 },
-      contentStats: { totalContent: 0, activeContent: 0, trendingContent: 0, newContentToday: 0, totalViews: 0 },
-      revenueStats: { totalRevenue: 0, monthlyRevenue: 0, pendingPayments: 0, activeSubscriptions: 0, averageSubscriptionValue: 0 },
-      systemStats: { totalChannels: 0, activeChannels: 0, totalBots: 1, systemUptime: '0%', totalCommands: 0 },
-      securityStats: { activeBans: 0, securityEvents: 0, suspiciousActivities: 0, blockedIPs: 0 }
-    };
-  }
-
-  private async getUserRole(userId: number): Promise<string> {
-    try {
-      const result = await query('SELECT role FROM users WHERE id = $1', [userId]);
-      return result.rows[0]?.role || 'user';
-    } catch (error) {
-      console.error('Error getting user role:', error);
-      return 'user';
-    }
-  }
-
-  private async getInternalUserId(telegramId: number): Promise<number | null> {
-    try {
-      const result = await query('SELECT id FROM users WHERE telegram_id = $1', [telegramId]);
-      return result.rows[0]?.id || null;
-    } catch (error) {
-      console.error('Error getting internal user ID:', error);
-      return null;
-    }
-  }
 
   // Security monitoring implementation
   private async showSecurityMonitoring(chatId: number): Promise<void> {
@@ -884,37 +996,6 @@ export class AdminDashboard {
     }
   }
 
-  private getSecurityEventEmoji(eventType: string): string {
-    const eventEmojis: { [key: string]: string } = {
-      'ban_user': '🚫',
-      'unban_user': '✅',
-      'security_warning': '⚠️',
-      'suspicious_activity': '🔍',
-      'failed_login': '🚨',
-      'spam_detected': '📢',
-      'default': '🔒'
-    };
-    return eventEmojis[eventType] || eventEmojis['default'];
-  }
-
-  private calculateSecurityHealth(stats: any): number {
-    // Calculate security health score based on various metrics
-    let score = 100;
-    
-    // Deduct points for security issues
-    score -= Math.min(stats.totalBanned * 2, 20); // Max 20 points deduction for bans
-    score -= Math.min(stats.activeWarnings * 5, 30); // Max 30 points for warnings
-    score -= Math.min(stats.suspiciousActivities24h * 3, 25); // Max 25 points for suspicious activities
-    
-    return Math.max(score, 0);
-  }
-
-  private getHealthIndicator(score: number): string {
-    if (score >= 90) return '🟢';
-    if (score >= 70) return '🟡';
-    if (score >= 50) return '🟠';
-    return '🔴';
-  }
 
   private async showAdvancedAnalytics(chatId: number): Promise<void> {
     await this.bot.sendMessage(chatId, 

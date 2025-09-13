@@ -154,8 +154,7 @@ export class CrossChannelEnforcement {
         default:
           if (data.startsWith('security_ban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
-            // Ban functionality handled through other interfaces
-            await this.startUserBanProcess(chatId, internalUserId);
+            await this.confirmBanUser(chatId, targetUserId, internalUserId);
           } else if (data.startsWith('security_unban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
             const telegramUserId = parseInt(data.split('_')[3] || '0');
@@ -173,6 +172,26 @@ export class CrossChannelEnforcement {
           } else if (data.startsWith('security_warn_')) {
             const targetUserId = parseInt(data.split('_')[2]);
             await this.showActiveWarnings(chatId);
+          } else if (data.startsWith('execute_ban_')) {
+            const parts = data.split('_');
+            const banType = parts[2]; // warning, temp24, temp168, permanent
+            const targetUserId = parseInt(parts[3]);
+            const targetTelegramId = parseInt(parts[4]);
+            const bannedBy = parseInt(parts[5]);
+            await this.executeBanUser(chatId, banType, targetUserId, targetTelegramId, bannedBy);
+          } else if (data.startsWith('ban_custom_')) {
+            const parts = data.split('_');
+            const targetUserId = parseInt(parts[2]);
+            const targetTelegramId = parseInt(parts[3]);
+            const bannedBy = parseInt(parts[4]);
+            await this.showCustomBanOptions(chatId, targetUserId, targetTelegramId, bannedBy);
+          } else if (data.startsWith('execute_ban_custom')) {
+            const parts = data.split('_');
+            const durationHours = parseInt(parts[3]);
+            const targetUserId = parseInt(parts[4]);
+            const targetTelegramId = parseInt(parts[5]);
+            const bannedBy = parseInt(parts[6]);
+            await this.executeCustomBan(chatId, durationHours, targetUserId, targetTelegramId, bannedBy);
           }
           break;
       }
@@ -184,6 +203,7 @@ export class CrossChannelEnforcement {
       );
     }
   }
+
 
   /**
    * Ban user across all channels
@@ -953,6 +973,249 @@ export class CrossChannelEnforcement {
       console.error('Error confirming unban user:', error);
       await this.bot.sendMessage(chatId, 
         '⚠️ خطأ في تأكيد إلغاء الحظر.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Confirm ban user with direct target
+   */
+  async confirmBanUser(chatId: number, userId: number, bannedBy: number): Promise<void> {
+    try {
+      // Get user info
+      const userResult = await query(`
+        SELECT id, first_name, last_name, username, telegram_id, is_banned, created_at, last_activity
+        FROM users 
+        WHERE id = $1
+      `, [userId]);
+
+      if (userResult.rows.length === 0) {
+        await this.bot.sendMessage(chatId, 
+          '❌ <b>المستخدم غير موجود</b>',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      const user = userResult.rows[0];
+      const telegramUserId = user.telegram_id;
+      const joinDate = new Date(user.created_at).toLocaleDateString('ar-SA');
+      const lastActive = user.last_activity ? new Date(user.last_activity).toLocaleDateString('ar-SA') : 'غير محدد';
+
+      if (user.is_banned) {
+        await this.bot.sendMessage(chatId, 
+          '⚠️ <b>المستخدم محظور بالفعل</b>\n\nاستخدم قائمة إلغاء الحظر لإلغاء حظره أولاً.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      const keyboard = [
+        [
+          { text: '⚠️ إصدار تحذير', callback_data: `execute_ban_warning_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '🕒 حظر مؤقت (24 ساعة)', callback_data: `execute_ban_temp24_${userId}_${telegramUserId}_${bannedBy}` }
+        ],
+        [
+          { text: '⏰ حظر مؤقت (7 أيام)', callback_data: `execute_ban_temp168_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '🚫 حظر دائم', callback_data: `execute_ban_permanent_${userId}_${telegramUserId}_${bannedBy}` }
+        ],
+        [
+          { text: '✏️ حظر مخصص', callback_data: `ban_custom_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '❌ إلغاء العملية', callback_data: 'security_management' }
+        ]
+      ];
+
+      const message = `🚫 <b>تأكيد حظر المستخدم</b>\n\n` +
+                     `👤 <b>معلومات المستخدم:</b>\n` +
+                     `• الاسم: ${user.first_name} ${user.last_name || ''}\n` +
+                     `• اسم المستخدم: @${user.username || 'غير محدد'}\n` +
+                     `• المعرف: ${user.id}\n` +
+                     `• معرف التلجرام: ${telegramUserId}\n` +
+                     `• تاريخ الانضمام: ${joinDate}\n` +
+                     `• آخر نشاط: ${lastActive}\n\n` +
+                     `⚡ <b>خيارات الحظر:</b>\n` +
+                     `⚠️ <b>تحذير:</b> إرسال تحذير بدون حظر فعلي\n` +
+                     `🕒 <b>مؤقت:</b> حظر لفترة محددة\n` +
+                     `🚫 <b>دائم:</b> حظر دائم من جميع القنوات\n` +
+                     `✏️ <b>مخصص:</b> حظر بمدة وسبب مخصص\n\n` +
+                     `⚠️ <b>الحظر سيؤدي إلى:</b>\n` +
+                     `• منع الوصول لجميع القنوات المراقبة\n` +
+                     `• إرسال إشعار للمستخدم\n` +
+                     `• تسجيل الإجراء في سجل الأمان\n\n` +
+                     `<b>اختر نوع الحظر المناسب:</b>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error confirming ban user:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في تأكيد حظر المستخدم.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Execute ban user with predefined settings
+   */
+  async executeBanUser(chatId: number, banType: string, userId: number, telegramUserId: number, bannedBy: number): Promise<void> {
+    try {
+      let reason = 'انتهاك قوانين البوت';
+      let duration: number | undefined;
+      let banTypeFormatted: 'temporary' | 'permanent' | 'warning';
+
+      // Map ban type to parameters
+      switch (banType) {
+        case 'warning':
+          banTypeFormatted = 'warning';
+          reason = 'تحذير رسمي - يرجى الالتزام بقوانين البوت';
+          break;
+        case 'temp24':
+          banTypeFormatted = 'temporary';
+          duration = 24;
+          reason = 'حظر مؤقت 24 ساعة - انتهاك قوانين البوت';
+          break;
+        case 'temp168':
+          banTypeFormatted = 'temporary';
+          duration = 168; // 7 days
+          reason = 'حظر مؤقت 7 أيام - انتهاك متكرر لقوانين البوت';
+          break;
+        case 'permanent':
+          banTypeFormatted = 'permanent';
+          reason = 'حظر دائم - انتهاك جسيم لقوانين البوت';
+          break;
+        default:
+          await this.bot.sendMessage(chatId, 
+            '❌ <b>نوع حظر غير صحيح</b>',
+            { parse_mode: 'HTML' }
+          );
+          return;
+      }
+
+      // Execute the ban
+      const success = await this.banUserAcrossChannels(telegramUserId, reason, banTypeFormatted, duration, bannedBy);
+
+      if (success) {
+        // Get user name for confirmation message
+        const userResult = await query('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
+        const userName = userResult.rows[0] ? 
+          `${userResult.rows[0].first_name} ${userResult.rows[0].last_name || ''}`.trim() : 'المستخدم';
+
+        const actionText = banTypeFormatted === 'warning' ? 'تم إصدار التحذير' : 'تم الحظر';
+        const typeText = banTypeFormatted === 'warning' ? 'تحذير' : 
+                        banTypeFormatted === 'permanent' ? 'حظر دائم' : 
+                        `حظر مؤقت ${duration} ساعة`;
+
+        await this.bot.sendMessage(chatId, 
+          `✅ <b>${actionText} بنجاح</b>\n\n` +
+          `👤 المستخدم: ${userName}\n` +
+          `⚡ نوع الإجراء: ${typeText}\n` +
+          `📝 السبب: ${reason}\n\n` +
+          `🔔 <i>تم إرسال إشعار للمستخدم وتسجيل الإجراء</i>`,
+          { parse_mode: 'HTML' }
+        );
+      } else {
+        await this.bot.sendMessage(chatId, 
+          '❌ <b>فشل في تنفيذ الإجراء</b>\n\nحدث خطأ أثناء تنفيذ العملية.',
+          { parse_mode: 'HTML' }
+        );
+      }
+    } catch (error) {
+      console.error('Error executing ban user:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في تنفيذ الحظر.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Show custom ban options
+   */
+  async showCustomBanOptions(chatId: number, userId: number, telegramUserId: number, bannedBy: number): Promise<void> {
+    try {
+      // Get user info for display
+      const userResult = await query('SELECT first_name, last_name, username FROM users WHERE id = $1', [userId]);
+      const userName = userResult.rows[0] ? 
+        `${userResult.rows[0].first_name} ${userResult.rows[0].last_name || ''}`.trim() : 'المستخدم';
+
+      const keyboard = [
+        [
+          { text: '1 ساعة', callback_data: `execute_ban_custom1_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '6 ساعات', callback_data: `execute_ban_custom6_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '12 ساعة', callback_data: `execute_ban_custom12_${userId}_${telegramUserId}_${bannedBy}` }
+        ],
+        [
+          { text: '3 أيام', callback_data: `execute_ban_custom72_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '30 يوم', callback_data: `execute_ban_custom720_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '90 يوم', callback_data: `execute_ban_custom2160_${userId}_${telegramUserId}_${bannedBy}` }
+        ],
+        [
+          { text: '✏️ إدخال مدة مخصصة', callback_data: `ban_input_duration_${userId}_${telegramUserId}_${bannedBy}` },
+          { text: '❌ إلغاء', callback_data: 'security_management' }
+        ]
+      ];
+
+      const message = `⏰ <b>خيارات الحظر المخصص</b>\n\n` +
+                     `👤 <b>المستخدم:</b> ${userName}\n\n` +
+                     `⚡ <b>اختر مدة الحظر:</b>\n` +
+                     `🕐 <b>مدد سريعة:</b> 1-12 ساعة للمخالفات البسيطة\n` +
+                     `📅 <b>مدد متوسطة:</b> 3-90 يوم للمخالفات المتوسطة\n` +
+                     `✏️ <b>مدة مخصصة:</b> إدخال مدة بالساعات\n\n` +
+                     `💡 <i>اختر المدة المناسبة لنوع المخالفة</i>`;
+
+      await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing custom ban options:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في عرض خيارات الحظر المخصص.',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
+
+  /**
+   * Execute custom duration ban
+   */
+  async executeCustomBan(chatId: number, durationHours: number, userId: number, telegramUserId: number, bannedBy: number): Promise<void> {
+    try {
+      const reason = `حظر مؤقت ${durationHours} ساعة - انتهاك قوانين البوت`;
+      const success = await this.banUserAcrossChannels(telegramUserId, reason, 'temporary', durationHours, bannedBy);
+
+      if (success) {
+        // Get user name for confirmation message
+        const userResult = await query('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
+        const userName = userResult.rows[0] ? 
+          `${userResult.rows[0].first_name} ${userResult.rows[0].last_name || ''}`.trim() : 'المستخدم';
+
+        const expiryDate = new Date();
+        expiryDate.setHours(expiryDate.getHours() + durationHours);
+
+        await this.bot.sendMessage(chatId, 
+          `✅ <b>تم الحظر المؤقت بنجاح</b>\n\n` +
+          `👤 المستخدم: ${userName}\n` +
+          `⏰ المدة: ${durationHours} ساعة\n` +
+          `📅 ينتهي في: ${expiryDate.toLocaleString('ar-SA')}\n` +
+          `📝 السبب: ${reason}\n\n` +
+          `🔔 <i>تم إرسال إشعار للمستخدم وتسجيل الإجراء</i>`,
+          { parse_mode: 'HTML' }
+        );
+      } else {
+        await this.bot.sendMessage(chatId, 
+          '❌ <b>فشل في تنفيذ الحظر</b>\n\nحدث خطأ أثناء تنفيذ العملية.',
+          { parse_mode: 'HTML' }
+        );
+      }
+    } catch (error) {
+      console.error('Error executing custom ban:', error);
+      await this.bot.sendMessage(chatId, 
+        '⚠️ خطأ في تنفيذ الحظر المخصص.',
         { parse_mode: 'HTML' }
       );
     }
