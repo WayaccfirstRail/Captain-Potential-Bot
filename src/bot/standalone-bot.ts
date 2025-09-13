@@ -10,9 +10,27 @@ import {
 } from './messageTemplates';
 import { query } from '../database/client';
 
+// Import Advanced Feature Systems
+import { TeaserSystem } from '../features/teaserSystem';
+import { CommandCustomizationSystem } from '../features/commandCustomization';
+import { PremiumChannelControl } from '../features/premiumChannelControl';
+import { CrossChannelEnforcement } from '../features/crossChannelEnforcement';
+import { NotificationSystem } from '../features/notificationSystem';
+import { AutomatedForwarding } from '../features/automatedForwarding';
+import { AdminDashboard } from '../features/adminDashboard';
+
 // Initialize Telegram Bot
 const token = process.env.TELEGRAM_BOT_TOKEN!;
 const bot = new TelegramBot(token, { polling: true });
+
+// Initialize Advanced Feature Systems
+const teaserSystem = new TeaserSystem(bot);
+const commandSystem = new CommandCustomizationSystem(bot);
+const premiumChannelControl = new PremiumChannelControl(bot);
+const securityEnforcement = new CrossChannelEnforcement(bot);
+const notificationSystem = new NotificationSystem(bot);
+const automatedForwarding = new AutomatedForwarding(bot);
+const adminDashboard = new AdminDashboard(bot);
 
 // Bot configuration
 const BOT_CONFIG = {
@@ -82,6 +100,62 @@ export function startCinemaBot() {
     
     await handleTrendingCommand(chatId, language);
   });
+
+  // Handle /admin command - Main admin dashboard
+  bot.onText(/\/admin/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await adminDashboard.showMainDashboard(chatId, userId);
+  });
+
+  // Handle /teaser command - Teaser creation
+  bot.onText(/\/teaser/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await teaserSystem.startTeaserCreation(chatId, userId);
+  });
+
+  // Handle /commands command - Custom command management
+  bot.onText(/\/commands/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await commandSystem.showCommandManagement(chatId, userId);
+  });
+
+  // Handle /premium command - Premium channel management
+  bot.onText(/\/premium_admin/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await premiumChannelControl.showChannelManagement(chatId, userId);
+  });
+
+  // Handle /security command - Security management
+  bot.onText(/\/security/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await securityEnforcement.showSecurityManagement(chatId, userId);
+  });
+
+  // Handle /notify command - Notification management
+  bot.onText(/\/notify/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await notificationSystem.showNotificationManagement(chatId, userId);
+  });
+
+  // Handle /forward command - Forwarding management
+  bot.onText(/\/forward/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id || 0;
+    
+    await automatedForwarding.showForwardingManagement(chatId, userId);
+  });
   
   // Handle direct messages (without commands)
   bot.on('message', async (msg: Message) => {
@@ -129,44 +203,71 @@ export function startCinemaBot() {
     await bot.answerCallbackQuery(callbackQuery.id);
     
     // Handle different callback actions
-    if (data.startsWith('content_')) {
-      const contentId = parseInt(data.split('_')[1]);
-      await showContentDetails(chatId, contentId, language);
-    } else if (data.startsWith('lang_')) {
-      const lang = data.split('_')[1] as 'ar' | 'en';
-      if (callbackQuery.from.id) {
-        await updateUserLanguage(callbackQuery.from.id, lang);
-        await bot.sendMessage(chatId, 
-          lang === 'ar' ? '✅ تم تغيير اللغة إلى العربية' : '✅ Language changed to English'
-        );
+    try {
+      // Advanced Feature System Callbacks
+      if (data.startsWith('teaser_')) {
+        await teaserSystem.handleTeaserCallback(callbackQuery);
+      } else if (data.startsWith('cmd_')) {
+        await commandSystem.handleCommandCallback(callbackQuery);
+      } else if (data.startsWith('premium_')) {
+        await premiumChannelControl.handleChannelCallback(callbackQuery);
+      } else if (data.startsWith('security_')) {
+        await securityEnforcement.handleSecurityCallback(callbackQuery);
+      } else if (data.startsWith('notify_')) {
+        await notificationSystem.handleNotificationCallback(callbackQuery);
+      } else if (data.startsWith('forward_')) {
+        await automatedForwarding.handleForwardingCallback(callbackQuery);
+      } else if (data.startsWith('dashboard_')) {
+        await adminDashboard.handleDashboardCallback(callbackQuery);
       }
-    } else if (data === 'trending') {
-      await handleTrendingCommand(chatId, language);
-    } else if (data === 'search') {
+      // Basic Bot Callbacks
+      else if (data.startsWith('content_')) {
+        const contentId = parseInt(data.split('_')[1]);
+        await showContentDetails(chatId, contentId, language);
+      } else if (data.startsWith('lang_')) {
+        const lang = data.split('_')[1] as 'ar' | 'en';
+        if (callbackQuery.from.id) {
+          await updateUserLanguage(callbackQuery.from.id, lang);
+          await bot.sendMessage(chatId, 
+            lang === 'ar' ? '✅ تم تغيير اللغة إلى العربية' : '✅ Language changed to English'
+          );
+        }
+      } else if (data === 'trending') {
+        await handleTrendingCommand(chatId, language);
+      } else if (data === 'search') {
+        await bot.sendMessage(chatId, 
+          language === 'ar' 
+            ? '🔍 اكتب اسم الفيلم أو المسلسل الذي تبحث عنه:'
+            : '🔍 Type the name of the movie or series you\'re looking for:'
+        );
+      } else if (data === 'movies') {
+        await handleSectionQuery(chatId, 'movies', language);
+      } else if (data === 'series') {
+        await handleSectionQuery(chatId, 'series', language);
+      } else if (data === 'anime') {
+        await handleSectionQuery(chatId, 'anime', language);
+      } else if (data === 'docs') {
+        await handleSectionQuery(chatId, 'docs', language);
+      } else if (data === 'premium') {
+        await handlePremiumQuery(chatId, language);
+      } else if (data === 'language') {
+        await showLanguageSelector(chatId, language);
+      } else if (data === 'back_main') {
+        const welcomeMessage = getWelcomeMessage('المستخدم', language);
+        const keyboard = getMainKeyboard(language);
+        await bot.sendMessage(chatId, welcomeMessage, {
+          reply_markup: { inline_keyboard: keyboard },
+          parse_mode: 'HTML'
+        });
+      }
+    } catch (error) {
+      console.error('Callback query error:', error);
       await bot.sendMessage(chatId, 
         language === 'ar' 
-          ? '🔍 اكتب اسم الفيلم أو المسلسل الذي تبحث عنه:'
-          : '🔍 Type the name of the movie or series you\'re looking for:'
+          ? '⚠️ حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.'
+          : '⚠️ Error processing your request. Please try again.',
+        { parse_mode: 'HTML' }
       );
-    } else if (data === 'movies') {
-      await handleSectionQuery(chatId, 'movies', language);
-    } else if (data === 'series') {
-      await handleSectionQuery(chatId, 'series', language);
-    } else if (data === 'anime') {
-      await handleSectionQuery(chatId, 'anime', language);
-    } else if (data === 'docs') {
-      await handleSectionQuery(chatId, 'docs', language);
-    } else if (data === 'premium') {
-      await handlePremiumQuery(chatId, language);
-    } else if (data === 'language') {
-      await showLanguageSelector(chatId, language);
-    } else if (data === 'back_main') {
-      const welcomeMessage = getWelcomeMessage('المستخدم', language);
-      const keyboard = getMainKeyboard(language);
-      await bot.sendMessage(chatId, welcomeMessage, {
-        reply_markup: { inline_keyboard: keyboard },
-        parse_mode: 'HTML'
-      });
     }
   });
   
