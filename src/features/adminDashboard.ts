@@ -124,11 +124,30 @@ export class AdminDashboard {
   async handleDashboardCallback(callbackQuery: CallbackQuery): Promise<void> {
     const chatId = callbackQuery.message?.chat.id;
     const data = callbackQuery.data;
-    const userId = callbackQuery.from.id;
+    const telegramId = callbackQuery.from.id;
 
     if (!chatId || !data) return;
 
     await this.bot.answerCallbackQuery(callbackQuery.id);
+
+    // Get internal user ID and verify admin authorization
+    const internalUserId = await this.getInternalUserId(telegramId);
+    if (!internalUserId) {
+      await this.bot.sendMessage(chatId, 
+        '❌ <b>خطأ في التفويض</b>\n\nلم يتم العثور على معرف المستخدم.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const userRole = await this.getUserRole(internalUserId);
+    if (!['owner', 'admin'].includes(userRole)) {
+      await this.bot.sendMessage(chatId, 
+        '❌ <b>صلاحيات غير كافية</b>\n\nهذه العملية متاحة للمدراء فقط.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
 
     try {
       switch (data) {
@@ -163,10 +182,10 @@ export class AdminDashboard {
           await this.showBotManagement(chatId);
           break;
         case 'dashboard_refresh':
-          await this.showMainDashboard(chatId, userId);
+          await this.showMainDashboard(chatId, internalUserId);
           break;
         case 'dashboard_export':
-          await this.exportReports(chatId, userId);
+          await this.exportReports(chatId, internalUserId);
           break;
         default:
           if (data.startsWith('dashboard_user_')) {
@@ -714,10 +733,21 @@ export class AdminDashboard {
 
   private async getUserRole(userId: number): Promise<string> {
     try {
-      const result = await query('SELECT role FROM users WHERE telegram_id = $1', [userId]);
+      const result = await query('SELECT role FROM users WHERE id = $1', [userId]);
       return result.rows[0]?.role || 'user';
     } catch (error) {
+      console.error('Error getting user role:', error);
       return 'user';
+    }
+  }
+
+  private async getInternalUserId(telegramId: number): Promise<number | null> {
+    try {
+      const result = await query('SELECT id FROM users WHERE telegram_id = $1', [telegramId]);
+      return result.rows[0]?.id || null;
+    } catch (error) {
+      console.error('Error getting internal user ID:', error);
+      return null;
     }
   }
 

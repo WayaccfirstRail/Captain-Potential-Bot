@@ -97,16 +97,35 @@ export class CrossChannelEnforcement {
   async handleSecurityCallback(callbackQuery: CallbackQuery): Promise<void> {
     const chatId = callbackQuery.message?.chat.id;
     const data = callbackQuery.data;
-    const userId = callbackQuery.from.id;
+    const telegramId = callbackQuery.from.id;
 
     if (!chatId || !data) return;
 
     await this.bot.answerCallbackQuery(callbackQuery.id);
 
+    // Get internal user ID and verify admin authorization
+    const internalUserId = await this.getInternalUserId(telegramId);
+    if (!internalUserId) {
+      await this.bot.sendMessage(chatId, 
+        '❌ <b>خطأ في التفويض</b>\n\nلم يتم العثور على معرف المستخدم.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const userRole = await this.getUserRole(internalUserId);
+    if (!['owner', 'admin'].includes(userRole)) {
+      await this.bot.sendMessage(chatId, 
+        '❌ <b>صلاحيات غير كافية</b>\n\nهذه العملية متاحة للمدراء فقط.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
     try {
       switch (data) {
         case 'security_ban_user':
-          await this.startUserBanProcess(chatId, userId);
+          await this.startUserBanProcess(chatId, internalUserId);
           break;
         case 'security_unban_user':
           await this.showUnbanInterface(chatId);
@@ -136,11 +155,21 @@ export class CrossChannelEnforcement {
           if (data.startsWith('security_ban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
             // Ban functionality handled through other interfaces
-            await this.startUserBanProcess(chatId, userId);
+            await this.startUserBanProcess(chatId, internalUserId);
           } else if (data.startsWith('security_unban_')) {
             const targetUserId = parseInt(data.split('_')[2]);
             const telegramUserId = parseInt(data.split('_')[3] || '0');
-            await this.confirmUnbanUser(chatId, targetUserId, telegramUserId, userId);
+            await this.confirmUnbanUser(chatId, targetUserId, telegramUserId, internalUserId);
+          } else if (data.startsWith('unban_confirm_')) {
+            const parts = data.split('_');
+            const targetUserId = parseInt(parts[2]);
+            const targetTelegramId = parseInt(parts[3]);
+            await this.confirmUnbanUser(chatId, targetUserId, targetTelegramId, internalUserId);
+          } else if (data.startsWith('execute_unban_')) {
+            const parts = data.split('_');
+            const targetUserId = parseInt(parts[2]);
+            const targetTelegramId = parseInt(parts[3]);
+            await this.executeUnbanUser(chatId, targetUserId, targetTelegramId, internalUserId);
           } else if (data.startsWith('security_warn_')) {
             const targetUserId = parseInt(data.split('_')[2]);
             await this.showActiveWarnings(chatId);
@@ -554,10 +583,21 @@ export class CrossChannelEnforcement {
   // Helper methods
   private async getUserRole(userId: number): Promise<string> {
     try {
-      const result = await query('SELECT role FROM users WHERE telegram_id = $1', [userId]);
+      const result = await query('SELECT role FROM users WHERE id = $1', [userId]);
       return result.rows[0]?.role || 'user';
     } catch (error) {
+      console.error('Error getting user role:', error);
       return 'user';
+    }
+  }
+
+  private async getInternalUserId(telegramId: number): Promise<number | null> {
+    try {
+      const result = await query('SELECT id FROM users WHERE telegram_id = $1', [telegramId]);
+      return result.rows[0]?.id || null;
+    } catch (error) {
+      console.error('Error getting internal user ID:', error);
+      return null;
     }
   }
 
@@ -575,9 +615,9 @@ export class CrossChannelEnforcement {
   private async logAdminAction(adminId: number, actionType: string, targetType: string, targetId: number, details: any): Promise<void> {
     try {
       await query(`
-        INSERT INTO admin_actions (admin_id, action_type, target_type, target_id, action_details)
+        INSERT INTO admin_activity_logs (admin_id, action_type, action_description, target_user_id, metadata)
         VALUES ($1, $2, $3, $4, $5)
-      `, [adminId, actionType, targetType, targetId, JSON.stringify(details)]);
+      `, [adminId, actionType, `${actionType} on ${targetType}`, targetId, JSON.stringify(details)]);
     } catch (error) {
       console.error('Error logging admin action:', error);
     }

@@ -480,9 +480,10 @@ export class PremiumChannelControl {
 
   private async getUserRole(userId: number): Promise<string> {
     try {
-      const result = await query('SELECT role FROM users WHERE telegram_id = $1', [userId]);
+      const result = await query('SELECT role FROM users WHERE id = $1', [userId]);
       return result.rows[0]?.role || 'user';
     } catch (error) {
+      console.error('Error getting user role:', error);
       return 'user';
     }
   }
@@ -490,9 +491,9 @@ export class PremiumChannelControl {
   private async logAdminAction(adminId: number, actionType: string, targetType: string, targetId: number, details: any): Promise<void> {
     try {
       await query(`
-        INSERT INTO admin_actions (admin_id, action_type, target_type, target_id, action_details)
+        INSERT INTO admin_activity_logs (admin_id, action_type, action_description, target_user_id, metadata)
         VALUES ($1, $2, $3, $4, $5)
-      `, [adminId, actionType, targetType, targetId, JSON.stringify(details)]);
+      `, [adminId, actionType, `${actionType} on ${targetType}`, targetId, JSON.stringify(details)]);
     } catch (error) {
       console.error('Error logging admin action:', error);
     }
