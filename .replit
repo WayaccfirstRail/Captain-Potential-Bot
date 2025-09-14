@@ -11,8 +11,8 @@ packages = ["jq"]
 
 [deployment]
 build = ["npm", "run", "build"]
-run = ["bash", "-c", "npm run dev & npx inngest-cli dev -u http://localhost:5000/api/inngest --host 0.0.0.0 --port 3000 & npx tsx src/start-bot.ts"]
-deploymentTarget = "vm"
+run = ["npm", "run", "dev"]
+deploymentTarget = "autoscale"
 
 [[ports]]
 localPort = 3000
