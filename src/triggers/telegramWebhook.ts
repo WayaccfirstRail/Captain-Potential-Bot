@@ -48,14 +48,38 @@ async function setupTelegramWebhook() {
   const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS;
   if (domain && bot) {
     const webhookUrl = `https://${domain}/webhooks/telegram/${WEBHOOK_SECRET}`;
+    console.log('🔗 Setting webhook URL:', webhookUrl);
+    
     try {
+      // Clear any existing webhook first
+      await bot.deleteWebHook();
+      
+      // Set the new webhook
       const result = await bot.setWebHook(webhookUrl, {
         secret_token: WEBHOOK_SECRET
       });
       console.log('✅ Telegram webhook set:', result);
+      
+      // Verify the webhook was set correctly
+      const webhookInfo = await bot.getWebHookInfo();
+      console.log('📋 Webhook info:', {
+        url: webhookInfo.url,
+        has_custom_certificate: webhookInfo.has_custom_certificate,
+        pending_update_count: webhookInfo.pending_update_count,
+        last_error_date: webhookInfo.last_error_date,
+        last_error_message: webhookInfo.last_error_message,
+        max_connections: webhookInfo.max_connections
+      });
+      
+      if (webhookInfo.last_error_message) {
+        console.error('⚠️ Webhook has errors:', webhookInfo.last_error_message);
+      }
+      
     } catch (error) {
       console.error('❌ Failed to set Telegram webhook:', error);
     }
+  } else {
+    console.error('❌ Missing domain or bot instance for webhook setup');
   }
 }
 
@@ -97,6 +121,7 @@ export function registerTelegramWebhook() {
         }
 
         const update = await c.req.json();
+        console.log('📱 [Telegram] Raw webhook received:', JSON.stringify(update, null, 2));
         logger?.info("📱 [Telegram] Webhook received", { updateId: update.update_id });
 
         // Process asynchronously to return 200 immediately
