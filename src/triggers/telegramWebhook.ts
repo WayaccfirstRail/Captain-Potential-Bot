@@ -148,7 +148,7 @@ async function handleMessage(message: any, mastra: Mastra) {
 
   // Handle regular commands using existing bot tool
   try {
-    const { runtimeContext, tracingContext } = createContexts(logger);
+    const { runtimeContext, tracingContext } = createMinimalContexts();
     const response = await telegramBotTool.execute({
       context: {
         update_type: 'message',
@@ -200,7 +200,7 @@ async function handleCallbackQuery(callbackQuery: any, mastra: Mastra) {
 
   // Handle regular callbacks using existing bot tool
   try {
-    const { runtimeContext, tracingContext } = createContexts(logger);
+    const { runtimeContext, tracingContext } = createMinimalContexts();
     const response = await telegramBotTool.execute({
       context: {
         update_type: 'callback_query',
