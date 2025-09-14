@@ -18,8 +18,8 @@ import { toggleCommandTool } from '../mastra/tools/toggleCommandTool';
 
 import { query } from '../database/client';
 
-// Webhook secret for security
-const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || 'secure_random_secret_' + Math.random().toString(36);
+// Webhook secret for security (alphanumeric only for Telegram compatibility)
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || 'secure_random_secret_' + Math.random().toString(36).replace(/[^a-z0-9]/gi, '');
 
 // Check owner role function
 async function checkOwnerRole(userId: number): Promise<boolean> {
