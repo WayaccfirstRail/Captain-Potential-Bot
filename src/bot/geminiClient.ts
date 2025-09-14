@@ -1,5 +1,5 @@
 // Gemini AI integration for the Cinema Bot
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -87,11 +87,11 @@ export async function moderateContent(text: string): Promise<{
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: "object",
+          type: SchemaType.OBJECT,
           properties: {
-            isAppropriate: { type: "boolean" },
-            reason: { type: "string" },
-            severity: { type: "string", enum: ["low", "medium", "high"] }
+            isAppropriate: { type: SchemaType.BOOLEAN },
+            reason: { type: SchemaType.STRING },
+            severity: { type: SchemaType.STRING, enum: ["low", "medium", "high"] }
           },
           required: ["isAppropriate"]
         }
