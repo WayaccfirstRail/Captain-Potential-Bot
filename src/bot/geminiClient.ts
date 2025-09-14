@@ -2,7 +2,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 // Initialize Gemini AI client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 
 /**
  * Generate Arabic/English responses for bot conversations

@@ -10,8 +10,8 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
   process.exit(1);
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error('❌ GEMINI_API_KEY is required but not found in environment variables');
+if (!process.env.GOOGLE_API_KEY) {
+  console.error('❌ GOOGLE_API_KEY is required but not found in environment variables');
   process.exit(1);
 }
 
