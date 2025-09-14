@@ -1,9 +1,8 @@
 // Entry point to start the standalone Arabic Cinema Bot
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { startCinemaBot } from './bot/standalone-bot';
 
-// Load environment variables
-dotenv.config();
+// Environment variables are automatically loaded by dotenv/config import
 
 // Validate required environment variables
 if (!process.env.TELEGRAM_BOT_TOKEN) {
