@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "bash", "postgresql-16"]
+modules = ["nodejs-20", "bash"]
 
 [agent]
 stack = "AGENT_STACK"
@@ -44,41 +44,3 @@ localPort = 50053
 externalPort = 80
 
 [workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Mastra Application"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Inngest Server"
-
-[[workflows.workflow]]
-name = "Mastra Application"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx mastra dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow]]
-name = "Inngest Server"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./scripts/inngest.sh"
-waitForPort = 3000
-
-[workflows.workflow.metadata]
-outputType = "console"
