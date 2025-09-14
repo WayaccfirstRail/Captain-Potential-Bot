@@ -29,9 +29,9 @@ import { NotificationSystem } from '../features/notificationSystem';
 import { AutomatedForwarding } from '../features/automatedForwarding';
 import { AdminDashboard } from '../features/adminDashboard';
 
-// Initialize Telegram Bot (webhook mode, no polling)
+// Initialize Telegram Bot (polling mode for Replit)
 const token = process.env.TELEGRAM_BOT_TOKEN!;
-const bot = new TelegramBot(token, { polling: false });
+const bot = new TelegramBot(token, { polling: true });
 
 // Initialize Advanced Feature Systems
 const teaserSystem = new TeaserSystem(bot);

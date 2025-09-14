@@ -28,10 +28,6 @@ localPort = 36119
 externalPort = 3003
 
 [[ports]]
-localPort = 41545
-externalPort = 5000
-
-[[ports]]
 localPort = 44833
 externalPort = 3001
 
@@ -57,16 +53,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Mastra Server"
+args = "Telegram Bot"
 
 [[workflows.workflow]]
-name = "Mastra Server"
+name = "Telegram Bot"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+args = "tsx src/start-bot.ts"
 
 [workflows.workflow.metadata]
-outputType = "webview"
+outputType = "console"
