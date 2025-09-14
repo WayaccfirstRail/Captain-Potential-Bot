@@ -18,6 +18,14 @@ import { toggleCommandTool } from '../mastra/tools/toggleCommandTool';
 
 import { query } from '../database/client';
 
+// Helper function to create minimal contexts
+function createMinimalContexts() {
+  return {
+    runtimeContext: undefined as any,
+    tracingContext: undefined as any
+  };
+}
+
 // Webhook secret for security (alphanumeric only for Telegram compatibility)
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || 'secure_random_secret_' + Math.random().toString(36).replace(/[^a-z0-9]/gi, '');
 
@@ -91,11 +99,18 @@ export function registerTelegramWebhook() {
         const update = await c.req.json();
         logger?.info("📱 [Telegram] Webhook received", { updateId: update.update_id });
 
-        if (update.message) {
-          await handleMessage(update.message, mastra);
-        } else if (update.callback_query) {
-          await handleCallbackQuery(update.callback_query, mastra);
-        }
+        // Process asynchronously to return 200 immediately
+        void Promise.resolve().then(async () => {
+          try {
+            if (update.message) {
+              await handleMessage(update.message, mastra);
+            } else if (update.callback_query) {
+              await handleCallbackQuery(update.callback_query, mastra);
+            }
+          } catch (error) {
+            logger?.error("❌ [Telegram] Async processing error:", error);
+          }
+        });
 
         return c.text("OK", 200);
       } catch (error) {
@@ -133,6 +148,7 @@ async function handleMessage(message: any, mastra: Mastra) {
 
   // Handle regular commands using existing bot tool
   try {
+    const { runtimeContext, tracingContext } = createContexts(logger);
     const response = await telegramBotTool.execute({
       context: {
         update_type: 'message',
@@ -145,8 +161,8 @@ async function handleMessage(message: any, mastra: Mastra) {
         }
       },
       mastra,
-      runtimeContext: {},
-      tracingContext: {}
+      runtimeContext,
+      tracingContext
     });
 
     if (response.success) {
@@ -184,6 +200,7 @@ async function handleCallbackQuery(callbackQuery: any, mastra: Mastra) {
 
   // Handle regular callbacks using existing bot tool
   try {
+    const { runtimeContext, tracingContext } = createContexts(logger);
     const response = await telegramBotTool.execute({
       context: {
         update_type: 'callback_query',
@@ -194,8 +211,8 @@ async function handleCallbackQuery(callbackQuery: any, mastra: Mastra) {
         }
       },
       mastra,
-      runtimeContext: {},
-      tracingContext: {}
+      runtimeContext,
+      tracingContext
     });
 
     if (response.success) {
@@ -660,16 +677,20 @@ async function executeOwnerTool(userId: number, chatId: number, toolName: string
     
     switch (toolName) {
       case 'add_content':
-        result = await addContentTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await addContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'create_admin':
-        result = await createAdminTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await createAdminTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'delete_content':
-        result = await deleteContentTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await deleteContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'edit_content':
-        result = await editContentTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await editContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'list_admins':
         result = await listAdminsTool.execute({ 
@@ -699,13 +720,16 @@ async function executeOwnerTool(userId: number, chatId: number, toolName: string
         });
         break;
       case 'manage_permissions':
-        result = await managePermissionsTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await managePermissionsTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'remove_admin':
-        result = await removeAdminTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await removeAdminTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       case 'toggle_command':
-        result = await toggleCommandTool.execute({ context: params, mastra, runtimeContext: {}, tracingContext: {} });
+        const { runtimeContext, tracingContext } = createContexts(logger);
+        result = await toggleCommandTool.execute({ context: params, mastra, runtimeContext, tracingContext });
         break;
       default:
         throw new Error(`Unknown tool: ${toolName}`);
