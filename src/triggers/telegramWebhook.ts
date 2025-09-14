@@ -677,20 +677,16 @@ async function executeOwnerTool(userId: number, chatId: number, toolName: string
     
     switch (toolName) {
       case 'add_content':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await addContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await addContentTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'create_admin':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await createAdminTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await createAdminTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'delete_content':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await deleteContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await deleteContentTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'edit_content':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await editContentTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await editContentTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'list_admins':
         result = await listAdminsTool.execute({ 
@@ -701,8 +697,8 @@ async function executeOwnerTool(userId: number, chatId: number, toolName: string
             include_inactive: false 
           }, 
           mastra, 
-          runtimeContext: {}, 
-          tracingContext: {} 
+          runtimeContext: undefined as any, 
+          tracingContext: undefined as any 
         });
         break;
       case 'list_content':
@@ -715,21 +711,18 @@ async function executeOwnerTool(userId: number, chatId: number, toolName: string
             sort_order: 'desc' 
           }, 
           mastra, 
-          runtimeContext: {}, 
-          tracingContext: {} 
+          runtimeContext: undefined as any, 
+          tracingContext: undefined as any 
         });
         break;
       case 'manage_permissions':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await managePermissionsTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await managePermissionsTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'remove_admin':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await removeAdminTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await removeAdminTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       case 'toggle_command':
-        const { runtimeContext, tracingContext } = createContexts(logger);
-        result = await toggleCommandTool.execute({ context: params, mastra, runtimeContext, tracingContext });
+        result = await toggleCommandTool.execute({ context: params, mastra, runtimeContext: undefined as any, tracingContext: undefined as any });
         break;
       default:
         throw new Error(`Unknown tool: ${toolName}`);
