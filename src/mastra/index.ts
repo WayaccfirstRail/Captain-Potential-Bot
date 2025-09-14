@@ -13,6 +13,7 @@ import { addContentTool } from "./tools/addContentTool";
 import { editContentTool } from "./tools/editContentTool";
 import { deleteContentTool } from "./tools/deleteContentTool";
 import { listContentTool } from "./tools/listContentTool";
+import { registerTelegramWebhook } from "../triggers/telegramWebhook";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -131,6 +132,8 @@ export const mastra = new Mastra({
         // 3. Establishing a publish-subscribe system for real-time monitoring
         //    through the workflow:${workflowId}:${runId} channel
       },
+      // Telegram webhook for owner commands and bot integration
+      registerTelegramWebhook(),
     ],
   },
   logger:
