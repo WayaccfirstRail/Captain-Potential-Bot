@@ -24,6 +24,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 35765
+externalPort = 5000
+
+[[ports]]
 localPort = 36119
 externalPort = 3003
 
@@ -55,10 +59,6 @@ author = "agent"
 task = "workflow.run"
 args = "Mastra Server"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Telegram Bot"
-
 [[workflows.workflow]]
 name = "Mastra Server"
 author = "agent"
@@ -70,14 +70,3 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
-
-[[workflows.workflow]]
-name = "Telegram Bot"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx tsx src/bot/polling-bot.ts"
-
-[workflows.workflow.metadata]
-outputType = "console"
